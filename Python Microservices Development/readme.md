@@ -102,7 +102,7 @@ From there once,the user has found the perfect hotel and selected the booking op
 
 
 
-## The microservice approach
+## The microservice approach微服務方法
 
 If we were to build the same application using microservices, we would organize the code into several separate components that run in separate processes. 
 
@@ -114,29 +114,281 @@ We have already discussed the PDF report generator, and we can examine the rest 
 
 單片應用程序的內部互動只是通過單獨的部分可見。 我們改變了一些複雜性，最終得到了以下七個獨立的組件：
 
-1. Booking UI:
+1. **Booking UI**:A frontend service that generates the web user interface,an interacts with all the other microservices生成web用户界面的前端服务，与所有其他微服务交互
 
-2. PDF reports:
+2. **PDF reports**:A very simple service that will create PDFs for receipts or any other document given a template and some data ,Also known as the PDF reporting service一個非常簡單的服務，它將為收據或任何其他檔案創建PDF，並提供範本和一些數據，也稱為PDF報告服務
 
-3. Search:
+3. **Search**:A service that can be queried to get a list of hotels when given a locatin,This service has its own database 當給定位置時，可以査詢以獲取飯店清單的服務。此服務有自己的資料庫
 
-4. Payments:
+4. **Payments**:A service that interacts with the third-party bank serivice,and manages a biling database,It also sends emails on successful payment.一種與協力廠商銀行服務互動並管理帳單資料庫的服務，它還發送成功付款的電子郵件。
 
-5. Reservations:
+5. **Reservations**:Managers reservations and changes to bookings經理預訂和預訂更改
 
-6. Users:
+6. **Users**:Stores the user information,and interacts with users via emails存儲用戶資訊，並通過電子郵件與用戶互動
 
-7. Authentication:
+7. **Authentication**:An OAuth 2-based service that returns authentication tokens,which each microservice can use to authenticate when calling others 一個基於OAuth 2的服務，它返回身份驗證權杖，每個微服務可以在調用其他微服務時使用該權杖進行身份驗證
 
    
 
-## Microservice benefits 
+Those microservices, along with a few external services, like the email service, would provide a feature set similar to the monolithic application. In this design, each component communicates using the HTTP protocol, and features are made available through RESTful web services.In this design,each component communicates using the HTTP protocal,and features are made avaiable through RESTful web services.
+
+這些微服務以及一些外部服務（如電子郵件服務）將提供類似於單片應用程序的功能集。 在這個設計中，每個組件都使用HTTP協議進行通信，並且通過RESTful web服務提供了功能。在這個設計裏，每個組件使用HTTP協議通信，並且可以通過RESTful web服務提供功能。
 
 
 
-## Pitfalls of microservices 
+There's not centralized database,as each microservice deals internally with its own data structures and the data that gets in and out uses a language-agnostic format like **JSON**
+
+沒有集中化的資料庫，因為每個微服務都在內部處理自己的資料結構，進出的數據使用JSON這樣的語言不可知格式
 
 
 
-## Implementing microservices with Python 
+<u>Hers is a full definition attempt:</u>
+
+A microservice is a lighweight application that provides a narrow list of features with a well-defined contract.It is a component with a single responsibility that can be developed and deployed independently
+
+微服務是一個羽量級的應用程序，它提供了一個具有明確定義的契約的功能清單。它是一個具有單一職責的組件，可以獨立開發和部署
+
+
+
+## Microservice benefits 微服務的好處
+
+- Separation of concerns
+- Smaller projects to deal with
+- More scaling and deployment options
+
+### Separation of concerns 關注點分離
+
+First of all, each microservice can be developed independently by a separate team.
+
+首先，每個微服務都可以由單獨的團隊獨立開發。
+
+
+
+That also means the evolution of the app is more under control. than with monoliths 
+
+比整體方法更有控制
+
+
+
+This is known as loose coupling, and improves the overall project velocity as we apply, 
+
+這被稱為松耦合，當我們在服務級別應用類似於單一責任原則的理念時，它提高了整個項目的速度。 
+
+
+### Smaller projects 較小的項目
+
+s s s s s s
+
+The second benefit is breaking the complexity of the project. When you add a feature to an application such as PDF reporting, even if you do it cleanly, you make the code base bigger, more complicated, and sometimes slower. <u>Building that feature in a separate application avoids this problem and makes it easier to write it with whatever tools you want.</u>
+
+在單獨的項目中構建特徵避免了這種問題，也更加容易去使用想用的工具
+
+<u>You can refactor it often, shorten your release cycles,</u> and stay on top of things. The growth of the application remains under your control.
+
+
+
+<u>Dealing with a smaller project also reduces risks when improving the application:</u>
+ if a team wants to try out the latest programming language or framework, they can iterate quickly on a prototype that implements the same microservice API, try it out, and decide whether or not to stick with it.
+
+
+
+<u>Reducing the size of each component also makes it easier to think about for developers</u>, especially new ones joining the team or ones who are stressed about handling an outage with the service. Instead of having to work through an entire system, a developer can focus on a smaller area and not worry about the rest of the application's features.
+
+
+
+### Scaling and deployment 擴展和部署
+
+Finally, having your application split into components makes it easier to scale depending on your constraints. 最後，將應用程序折開為多個組件可以更容易地根據約束進行縮放。
+
+
+
+We can, thus, summarize the benefits of microservices as follows:
+
+- A team can develop each microservice independently ,and use whatever technology stack makes sense.They can define a custom release cycle.All they need to define is a language-agnostic HTTP API一個團隊可以獨立開發每個微服務，並使用任何有意義的科技堆棧。他們可以定義自定義發佈週期。他們只需要定義一個語言不可知的HTTP API
+
+- Developers split the application complexity into logical components,Each microservices focuses on doing one thing well開發人員將應用程序的複雜性劃分為邏輯組件，每個微服務都專注於做好一件事
+
+- Since microservice are standalone applications ,there's finer control over deployments,which makes scaling easier 由於微服務是獨立的應用程序，囙此對部署有更精細的控制，這使得擴展更容易
+
+   
+
+
+
+## Pitfalls of microservices 微服務的陷阱
+
+You need to be aware of these main problems you might have to deal with when coding microservices:
+
+- Illogical splitting
+- More network interactions
+- Data storing and sharing
+- Compatibility issues
+- Testing
+
+
+
+### Illogical splitting不合邏輯的分裂
+
+The design needs to mature with some try-and-fail cycles. And adding and removing microservices can be more painful than refactoring a monolithic application. You can mitigate this problem by avoiding splitting your app into microservices if the split is not evident.設計需要經過一些嘗試和失敗的迴圈才能成熟。 添加和删除微服務可能比重構單一應用程序更痛苦。 如果折開不明顯，您可以通過避免將應用程序折開為微服務來緩解這個問題。
+
+
+
+
+
+
+
+### More network interactions更多網路互動
+
+The second problem is the number of network interactions added to build the same application.
+
+
+
+That requires extra attention to how each backend service is called and raises a lot of questions, like the following:
+
+- What happens when the Booking UI cannot reach the PDF reporting service because of a network split or a laggy service?當Booking UI由於網絡分裂或服務滯後而無法訪問PDF報告服務時會發生什麼？
+
+- Does the Booking UI call the other services synchronously or asynchronously?預訂UI是同步還是非同步調用其他服務？
+
+- How will that impact the response time?這將如何影響回應時間？
+
+  
+
+### Data storing and sharing数据存储和共享
+
+Another problem is data storing and sharing. An effective microservice needs to be independent of other microservices, and ideally, <u>should not share a database.</u> What does this mean for our hotel booking app?
+
+
+
+Again, that raises a lot of questions, such as the following:
+
+- Do we use the same users' IDs across all database,or do we have independent IDs in each service and keep it as a hidden implementation detail?我們是在所有資料庫中使用相同的用戶ID，還是在每個服務中<u>使用獨立的ID並將其作為隱藏的實現細節？</u>
+- Once a user is added to the system, do we replicate some of her information in other services' databases via strategies like data pumping, or is that overkill?一旦一個用戶被添加到系統中，我們是通過諸如數據抽取之類的策略將她的一些資訊複製到其他服務的資料庫中，還是過度使用？
+- How do we deal with data removal?我們如何處理數據删除？
+
+### Compatibility issues相容性問題
+
+Another problem happens when a feature change impacts several microservices. If a change affects, in a backward-incompatible way, the data that travels between services, you're in for some trouble.
+
+
+
+### Testing測試
+
+ You can't fully test things out with just one piece of the puzzle, although having a clean and well-defined interface does help.你不可能只用一塊拼圖就完全測試出來，儘管擁有一個乾淨且定義良好的介面確實有幫助。
+
+
+
+
+
+The pitfalls of using microservices can be summarized as follows:
+
+- Premature splitting of an application into microservices can lead to architectural problems.過早地將應用程序折開為微服務可能會導致架構問題。
+- Network interactions between microservices add potential points of failure and additional overhead.微服務之間的網絡互動新增了潜在的故障點和額外的開銷。
+- Testing and deploying microservices can be complex.測試和部署微服務可能很複雜。
+- And the biggest challenge—data sharing between microservices is hard.微服務之間最大的挑戰是資料共用。
+
+
+
+
+
+## Implementing microservices with Python 用Python實現微服務
+
+> 好處
+
+Python is an amazingly versatile language. As you probably already know, Python is used to build many different kinds of applications – from simple system scripts that perform tasks on a server to large object-oriented applications that run services for millions of users. 
+
+> 缺點
+
+However, some developers criticize Python for being slow and unfit for building efficient web services
+
+
+
+### How web services workweb服務如何工作
+
+> If we imagine a simple program that answers queries on the web, the description
+>  is straightforward. A new connection is made, and the protocol is negotiated. A request is made, and some processing is done: perhaps a database is queried. Then a response is structured and sent, and the connection is closed. This is often how we want to think about our application's logic, because it keeps things simple for the developer as well as anyone else responsible for the program once it's running.
+>
+> The web is a big, complicated place, though. Various parts of the internet will try to do malicious things to a vulnerable web service they find. Others just behave badly because they have not been set up well. Even when things are working well, there are different HTTP protocol versions, encryption, load balancing, access control, and a whole set of other things to think about.
+>
+> Rather than reinvent all of this technology, there are **interfaces** and **frameworks** that let us use the tools that other people have built, and spend more of our time working on our own applications. They let us use web servers such as **Apache** and **nginx** and let them handle the difficult parts of being on the web, such as certificate management, load balancing, and handling multiple website identities. Our application then has a smaller, more manageable configuration to control
+>
+> its behavior.
+
+
+
+
+
+### The WSGI standard WSGI標準
+
+Inspired by the older **Common Gateway Interface** (**CGI**), <u>the Python web community has created a standard called the **Web Server Gateway Interface** (**WSGI**)</u>. It simplifies how you can write a Python application in order to serve HTTP requests. When your code uses this standard, your project can be executed by standard web servers like Apache or nginx, using WSGI extensions like uwsgi or mod_wsgi.
+
+
+
+Your application just has to deal with incoming requests and send back JSON responses, and Python includes all that goodness in its standard library.
+
+您的應用程序只需要處理傳入的請求並發回JSON響應，Python在其標準庫中包含了所有這些優點。
+
+
+
+You can create a fully functional microservice that returns the server's local time with a vanilla Python module of fewer than 10 lines:您可以使用少於10行的普通Python模塊創建一個功能齊全的微服務，返回服務器的本地時間：
+
+```python
+import time 
+import json 
+def application(environ,start_response):
+  headers =[('Content-type','applications/json')]
+  start_response('200 ok',headers)
+  return [bytes(json.dumps({"time":timetime()}),'utf8')]
+
+```
+
+<u>The biggest problem with WSGI, though, is its synchronous nature.</u> More recently, the **Asynchronous Server Gateway Interface** (**ASGI**) has emerged as a successor to WSGI, allowing frameworks to operate asynchronously with the same seamless behavior as before. What are synchronous and asynchronous applications? We will cover that now.<u>然而，WSGI最大的問題是其同步性</u>。 最近，非同步服務器閘道介面（ASGI）已成為WSGI的繼承者，允許框架以與以前相同的無縫行為非同步操作。 什麼是同步和非同步應用程序？ 我們現在就來報導。
+
+
+
+### Workers,threads and synchronicity 工作、線程和同步性
+
+Thinking back to our simple application that handles requests, our model of the program is synchronous. This means that it accepts a piece of work, does that work, and returns the result, <u>but while it's doing all of that, the program can't do anything else. Any other requests that come in when it's already working on something will have to wait.</u>
+
+回想一下我們處理請求的簡單應用程序，我們的程式模型是同步的。 這意味著它接受一段工作，執行該工作，並返回結果，但當<u>它執行所有這些工作時，程式不能執行任何其他操作。 當它已經在處理某件事情時，任何其他請求都必須等待</u>。
+
+解決方法有以下幾點，工作池是早期的方法，最近使用的都是非同步python
+
+
+
+#### A worker pool approach工作池方法
+
+Accepting a new request is often very fast, and the bulk of the time is taken up by doing the work that has been requested. Reading a request that tells you "Give me a list of all our customers in Paris" takes much less time than putting the list together and sending it back.
+
+接受新的請求通常很快，大部分時間都被完成請求的工作所佔用。 閱讀一份告訴你“給我一份我們在巴黎的所有客戶的名單”的請求，所花的時間要比把名單放在一起並寄回要少得多。
+
+**<u>When an application has lots of requests arriving, an effective strategy is to ensure that all the heavy lifting is done using other processes or threads.</u>** 當應用程序有大量請求到達時，一個有效的策略是確保所有繁重的工作都使用其他行程或線程完成。
+
+
+
+這個一個老技術但是有效率。不過他的缺點是
+
+As far as each worker is concerned, it receives work, and can't do anything else until it has finished. <u>This means that if you have eight worker processes, you can only handle eight simultaneous requests.</u> Your application could create more workers if it is running low, but there is always a bottleneck.
+
+就每個工人而言，他們都接受工作，在完成之前不能做任何其他事情。 這意味著，<u>如果您有八個工作行程，則只能同時處理八個請求。</u> 如果應用程序運行速度低，它可能會創建更多的工作人員，但始終存在瓶頸。
+
+
+
+There is also a practical limit to the number of processes and threads that an application can create, and swapping between them takes a lot of time that a responsive application can't always afford.
+
+應用程序可以創建的行程和線程的數量也有實際的限制，並且它們之間的交換需要大量的時間，而響應應用程序總是無法承受。
+
+
+
+#### Being asymchronous 不同步的
+
+
+
+#### Twisted,Tornado,Greenlets and Gevent 
+
+
+
+#### Asynchronous Python非同步Python
+
+
+
+### Language performace 語言表現
 
