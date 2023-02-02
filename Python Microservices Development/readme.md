@@ -380,15 +380,107 @@ There is also a practical limit to the number of processes and threads that an a
 
 #### Being asymchronous 不同步的
 
+You don't really want to be sitting there doing nothing while waiting for an answer, but that's what a process usually does if it's synchronous. An asynchronous program is aware that some tasks it has been told to perform might take a long time, and so it can get on with some other work while it is waiting, without necessarily having to use other processes or threads.
+
+你真的不想坐在那裡等待答案，但如果行程是同步的，那麼它通常會這樣做。 非同步程式知道被告知執行的某些任務可能需要很長時間，囙此它可以在等待時繼續執行其他工作，而不必使用其他行程或線程。
 
 
 #### Twisted,Tornado,Greenlets and Gevent 
+
+For a long time,non-WSGI framworks like Twisted and Tornado were the popular answers for concurrency when using Python.allowing developers to specify **callbacks** for many simultaneous requests.
+
+很長一段時間以來，Twisted和Tornado等非WSGI框架是使用Python時併發性的流行答案。允許開發人員為許多同時請求指定**callback**。
+
+
+
+A callback is a technique where the calling part of the program doesn't wait but instead tells the function what it should do with the result it generates. Often this is another function that it should call.
+
+callback是一種科技，程式的調用部分不等待，而是告訴函數它應該對生成的結果做什麼。 通常這是它應該調用的另一個函數。
+
+
 
 
 
 #### Asynchronous Python非同步Python
 
+Python 3 has introduced a full set of features and helpers in the asyncio package to build asynchronous applications; 
 
+**aiohttp** is one of the most mature asyncio packages,and building the earlier 'time' microservice with it would simply need these lines
+
+Aiohttp是最成熟的非同步包之一，用它構建早期的“time”微服務只需要以下幾行
+
+```python
+from aiohttp import web 
+import time 
+async def handle(request):
+  return web.json_response({'time':time.time()})
+
+if __name__ =="__main__":
+  app = web.application()
+  app.router.add_get("/",handle)
+  web.run_app(app)
+```
+
+在這個小示例中，我們非常接近如何實現同步應用程序。 我們使用非同步程式碼的唯一提示是async關鍵字，它將控制碼函數標記為協程。
+
+
+
+這一概念將在非同步Python應用程序的每一個級別上使用。 下麵是另一個使用aiogg的示例，aiogg是項目檔案中用於非同步的PostgreSQL庫：
+
+
+
+```python
+import asyncio
+import aiopg 
+
+dsn = "dbname=postgres user=postgres password=mysecretpassword
+host=127.0.0.1"
+async def go():
+  pool = await aiopg.create_pool(dsn)
+  async with pool.acquire() as conn:
+    async with conn.cursor() as cur:
+      await cur.excute("select 1 ")
+      ret = []
+      async for row in cur:
+        ret.append(row)
+      assert ret ==[(1,)]
+  await pool.clear()
+  
+loop = asyncio.get_event_loop()
+loop.run_until_complete(go())
+```
+
+With a few async and await prefixes, the function that performs an SQL query and sends back the result looks a lot like a synchronous function. We will explain more about this code in later chapters.
+
+通過幾個非同步和等待首碼，執行SQL査詢並返回結果的函數看起來很像同步函數。 我們將在後面的章節中詳細解釋此程式碼。
 
 ### Language performace 語言表現
+
+每個人都知道Python比Java或Go慢，但執行速度並不總是最重要的。 微服務通常是一個薄薄的程式碼層，它大部分時間都在等待其他服務的網絡響應。 它的覈心速度通常不如SQL査詢從Postgres服務器返回的速度重要，因為後者將代表構建響應所花費的大部分時間。
+
+但想要一個盡可能快的應用程序是合理的。
+Python社區中關於加速語言的一個有爭議的話題是**全域解譯器鎖（GIL）**如何影響效能，因為多執行緒應用程序不能使用多個行程。
+GIL有充分的理由存在。 它**<u>保護CPython解譯器的非執行緒安全部分，並存在於Ruby等其他語言中。 到目前為止，所有删除它的嘗試都未能產生更快的CPython實現。</u>**
+
+
+
+# Chapter2: Discovering Quart 探索Quart
+
+>  **Quart** was started in 2017 as an evolution of the popular **Flask** framework. Quart shares many of the same design decisions as Flask, and so a lot of the advice for one will work with the other. This book will focus on Quart to allow us to support asynchronous operations and to explore features such as WebSockets and HTTP/2 support.
+
+Quart是Flask的變種
+
+A typical example of this philosophy is when you need to interact with a SQL database. A framework such as Django is batteries-included and provides everything you need to build your web app, including an **Object-Relational Mapper** (**ORM**) to bind objects with database query results.
+
+
+
+### How Quart handles requestsQuart如何處理請求 
+
+
+
+### Quart's built-in featuresQuart的內寘功能
+
+
+
+### A microservice skeleton微服務框架
 
