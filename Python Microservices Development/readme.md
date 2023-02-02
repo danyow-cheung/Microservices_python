@@ -611,15 +611,126 @@ When a request comes in,Quats calls the view and uses a Request Context to make 
 
 當請求進入時，Quats調用視圖並使用請求上下文來確保每個請求都有一個特定於該請求的獨立環境，
 
+In the following example ,an HTTP Basic Authentication request that is sent by the client is always converte to a base64 form when sent to the server.
+
+```python
+from quart import Quart,request
+app = Quart(__name__)
+
+@app.route("/")
+def auth():
+    print("Quart's Authorization information")
+    print(request.authorization)
+    return ""
+
+if __name__ =="__main__":
+    app.run()
+    
+```
+
 
 
 #### Response相應
 
+In many of the previous examples, we have simply returned a Python dictionary and left Quart to produce a response for us that the client will understand. Sometimes, we have called jsonify() to ensure that the result is a JSON object.
 
+在前面的許多示例中，我們只是返回了一個Python字典，然後讓Quart為我們生成一個用戶端可以理解的響應。 有時，我們調用了jsonify（）來確保結果是JSON對象。
+
+有很多其他方式做響應，we could return any of the following and Quart would bo the right thing 
+
+- Response:create a Response object manually
+
+  
+
+- str:A string wil be encoded as a text/html object in the response.This is especially useful fot HTML pages
+
+  
+
+- dict: A dictionary wil be encoded as appliaction/json using jsonify() 
+
+- A genrator or asynchronous generator object can be returned so that data can be streamed to the client 
+
+- A (response,status) tuple: The response will be converted to a response object if it matches one of the preceding data types,and the status will be the HTTP response code used 
+
+- A(response,status,headers) tuple: The response wil be converted and the response object will use a dictionary provided as headers that should be added to the response 
+
+  
+
+  
+
+Here's an example with YAML, another popular way of representing data: the yamlify() function will return a (response, status, headers) tuple, which will be converted by Quart into a proper Response object:
+
+下麵是YAML的一個示例，這是另一種流行的數據表示管道：yamlify（）函數將返回一個（response，status，headers）元組，Quart將其轉換為一個適當的response對象：
+
+```python
+from quart import Quart 
+import yaml 
+app = Quart(__name__)
+
+def yamlify(data,status=200,headers=None):
+    _headers = {"Content-Type":'application/x-yaml'}
+    if headers is not None:
+        _headers.update(headers)
+    return yaml.safe_dump(data),status,_headers
+
+@app.route('/api')
+def my_microservice():
+    return yamlify(['HEllO','YAML','World!'])
+
+if __name__=='__main__':
+    app.run()
+    
+
+```
+
+上述代碼完成了
+
+1. When the application starts,any function decorated with @app.route() is registered as view and stored in app.url_map 當應用程序啟動時，任何用@app.route（）修飾的函數都會注册為視圖並存儲在app.url_map中
+2. A call is dispatched to the right view depending on its endpoint and methdo 調用將根據其端點和方法分派到正確的視圖
+3. A request object is created in a local,isolated execution context 請求對象是在本地、隔離的執行上下文中創建的
+4. A response object wraps the content to send back響應對象包裝要發送回的內容
 
 
 
 ### Quart's built-in featuresQuart的內寘功能
+
+除了上述的功能，Quart還有很多其他功能是有用的
+
+- The session object: Cookie-based data 
+
+- Globals: Storing data in the request context 
+
+- Signals:Sending and intercepting events 
+
+- Extensions and middleware : Adding features 
+
+- Templates: Building text-based content 
+
+- Configuring:Grouping your running options in a config file 
+
+- Blueprints:Organizing your code in namespaces 
+
+- Error handing and debugigng: Dealing with errors in your app 
+
+  
+
+#### Session
+
+#### Globals
+
+#### Signals
+
+#### Extensions and middleware 
+
+#### Templates 
+
+#### Configuration
+
+#### Blueprints
+
+#### Error handing 
+
+#### Custom error handler 
 
 
 
