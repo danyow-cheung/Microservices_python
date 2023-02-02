@@ -476,6 +476,147 @@ A typical example of this philosophy is when you need to interact with a SQL dat
 
 ### How Quart handles requestsQuart如何處理請求 
 
+The framework entry point is the Quart class in the quart.app module. Running a Quart application means running one single instance of this class, which will take care of handling incoming **Asynchronous Server Gateway Interface** (**ASGI**) and **Web Server Gateway Interface** (**WSGI**) requests, dispatch them to the right code, and then return a response. 
+
+框架入口點是Quart.app模塊中的Quart類。 運行Quart應用程序意味著運行這個類的一個實例，它將負責處理傳入的非同步服務器閘道介面（ASGI）和Web服務器閘道介面（WSGI）請求，將它們分派到正確的程式碼，然後返回響應。
+
+下面是一個基本的例子
+
+```python
+
+from quart import Quart,request,jsonify 
+
+app = Quart(__name__)
+
+@app.route("/api",provide_automatic_options = False)
+async def my_microservice():
+    print(dir(request))
+    response = jsonify({"hello":'world'})
+    print(response)
+    print(await response.get_data())
+    return response
+
+if __name__ =='__main__':
+    print(app.url_map)
+    app.run()
+    
+```
+
+返回值如
+
+```
+QuartMap([<QuartRule '/static/<filename>' (HEAD, GET, OPTIONS) -> static>,
+ <QuartRule '/api' (HEAD, GET) -> my_microservice>])
+ * Serving Quart app 'c2_quart_details'
+ * Environment: production
+ * Please use an ASGI server (e.g. Hypercorn) directly in production
+ * Debug mode: False
+ * Running on http://127.0.0.1:5000 (CTRL + C to quit)
+[2023-02-02 14:20:49 +0800] [2958] [INFO] Running on http://127.0.0.1:5000 (CTRL + C to quit)
+[2023-02-02 14:20:54 +0800] [2958] [INFO] 127.0.0.1:51924 GET / 1.1 404 207 2034
+[2023-02-02 14:20:54 +0800] [2958] [INFO] 127.0.0.1:51924 GET /favicon.ico 1.1 404 207 1791
+['__annotations__', '__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '__weakref__', '_cached_json', '_files', '_form', '_load_form_data', '_parse_content_type', '_parsing_lock', '_send_push_promise', 'accept_charsets', 'accept_encodings', 'accept_languages', 'accept_mimetypes', 'access_control_request_headers', 'access_control_request_method', 'access_route', 'args', 'authorization', 'base_url', 'blueprint', 'blueprints', 'body', 'body_class', 'body_timeout', 'cache_control', 'charset', 'content_encoding', 'content_length', 'content_md5', 'content_type', 'cookies', 'data', 'date', 'dict_storage_class', 'encoding_errors', 'endpoint', 'files', 'form', 'form_data_parser_class', 'full_path', 'get_data', 'get_json', 'headers', 'host', 'host_url', 'http_version', 'if_match', 'if_modified_since', 'if_none_match', 'if_range', 'if_unmodified_since', 'is_json', 'is_secure', 'json', 'json_module', 'list_storage_class', 'lock_class', 'make_form_data_parser', 'max_content_length', 'max_forwards', 'method', 'mimetype', 'mimetype_params', 'on_json_loading_failed', 'origin', 'parameter_storage_class', 'path', 'pragma', 'query_string', 'range', 'referrer', 'remote_addr', 'root_path', 'root_url', 'routing_exception', 'scheme', 'scope', 'script_root', 'send_push_promise', 'server', 'stream', 'trusted_hosts', 'url', 'url_charset', 'url_root', 'url_rule', 'user_agent', 'user_agent_class', 'values', 'view_args']
+<Response [200 OK]>
+b'{"hello":"world"}'
+[2023-02-02 14:20:59 +0800] [2958] [INFO] 127.0.0.1:51924 GET /api 1.1 200 17 1971
+```
+
+Let's explore what's happening here:
+
+- Routing: When the service starts, Quart creates the QuartMap object, and we can see here what it knows about endpoints and the associated views.
+
+- Request: Quart creates a Request object and my_microservice is showing us that it is a GET request to /api.
+
+- dir() shows us which methods and variables are in a class, such as get_data() to retrieve any data that was sent with the request.
+
+- Response: A Response object to be sent back to the client; in this case, curl. It has an HTTP response code of 200, indicating that everything is fine, and its data is the 'Hello world' dictionary we told it to send.
+
+  
+
+#### Routing 路徑
+
+Routing happens in app.url_map, which is an instance of the QuartMap class that uses a library called Werkzeug.
+
+路由發生在app.url_map中，它是QuartMap類的一個實例，使用一個名為Werkzeug的庫。
+
+That class usees regular expressions to determine a function to decorated by @app.route matches all the incoming request.
+
+這個類別使用常規的表達去決定路徑映射的函數
+
+
+
+By default,the mapper will only accept GET,OPTIONS and HEAD methods on a declared route.
+
+mapper只接受GET，OPTION，HEAD在指定的路徑。
+
+
+
+##### Variables and converters 變量和轉換
+
+A common requirements for an API is the ability to specify exactly which data we want to request,
+
+API常見的功能是知道我們發送請求的代碼是哪一個。
+
+
+
+do this with variable in the route  and allow your to describe endpoints with dynamic values 
+
+把變量放在路徑中，並且允許多種url結束符號
+
+```python
+@app.route('/person/<person_id>')
+def person(person_id):
+    return {'hello':person_id}
+```
+
+還可以指定變量的類型
+
+```python
+@app.route('/price/<float:money>')
+def price(money):
+    return 'money is'+str(money)+"$"
+```
+
+The best practice for routing is to keep it as static and straightforward as possible.
+
+使用路徑的最好練習是，使用靜態變量並且變量是直接的
+
+
+
+##### The url_for function url_函數
+
+, it will return its actual URL. Here's an example of using Python interactively
+
+```python
+from quart import url_for 
+import asyncio
+from c2_quart_convert import app 
+
+async def run_url_for():
+    async with app.test_request_context('/',method='GET'):
+        print(url_for('person',name='Alice'))
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(run_url_for())
+
+```
+
+
+
+
+
+#### Request請求
+
+When a request comes in,Quats calls the view and uses a Request Context to make sure that each request has an isolated enviroment,specific to that request,
+
+當請求進入時，Quats調用視圖並使用請求上下文來確保每個請求都有一個特定於該請求的獨立環境，
+
+
+
+#### Response相應
+
+
+
 
 
 ### Quart's built-in featuresQuart的內寘功能
