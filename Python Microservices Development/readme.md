@@ -1012,7 +1012,72 @@ The main module (app.py) can then import this file, and register its blueprint w
 
 #### Error handing 
 
+When something goes wrong in your application, it is important to be able to control what responses the clients will receive. In HTML web apps, you usually get specific HTML pages when you encounter a 404 (Resource not found) or 5xx (Server error), and that's how Quart works out of the box. But when building microservices, you need to have more control of what should be sent back to the client—that's where custom error handlers are useful.
+
+The other important feature is the ability to debug your code when an unexpected error occurs; Quart comes with a built-in debugger, which can be activated when your app runs in debug mode.
+
+**<u>app.run(debug=True)</u>**
+
+
+
 #### Custom error handler 
+
+Producing a generic error is a safe default behavior to avoid leaking any private information to users in the body of the error. 
+
+生成一般錯誤是一種安全的默認行為，以避免在錯誤主體中向用戶洩漏任何私人資訊。
+
+```python
+from quart import Quart
+app = Quart(__name__)
+
+@app.errorhandler(500)
+def error_handling(error):
+    return {"Error":str(error)},500 
+
+@app.route("/api")
+def my_microservice():
+    raise TypeError('SomeException')
+if __name__ =='__main__':
+    app.run(debug=True)
+
+```
+
+
+
+```python
+from quart import Quart,jsonify,abort 
+from werkzeug.exceptions import HTTPException,default_exceptions
+
+def jsonify_errors(app):
+    def error_handling(error):
+        if isinstance(error,HTTPException):
+            result = {
+                'code':error.code,
+                'description':error.description,
+                'message':str(error),
+            }
+        else:
+            description = abort.mapping[error.code].description
+            result = {'code':error.code,'description':description,'message':str(error)}
+
+        resp = jsonify(result)
+        resp.status_code = result['code']
+        return resp 
+
+    for code in default_exceptions.keys():
+        app.register_error_handler(code,error_handling)
+    return app 
+
+app = Quart(__name__)
+app = jsonify_errors(app)
+
+@app.route('/api')
+def my_microservice():
+    raise TypeError('Some exception')
+
+if __name__ =='__main__':
+    app.run(debug=True)
+```
 
 
 
