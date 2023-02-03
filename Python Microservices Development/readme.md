@@ -696,37 +696,319 @@ if __name__=='__main__':
 
 除了上述的功能，Quart還有很多其他功能是有用的
 
-- The session object: Cookie-based data 
+- The session object: Cookie-based data
+
+  基于cookie的数据
+
+   
 
 - Globals: Storing data in the request context 
 
+  存儲數據在請求文本中
+
 - Signals:Sending and intercepting events 
+
+  發送和暫停事件 
+
+  
 
 - Extensions and middleware : Adding features 
 
+  擴展和中間件：添加特徵
+
+  
+
 - Templates: Building text-based content 
+
+  模板：建立基於文本的內容
 
 - Configuring:Grouping your running options in a config file 
 
+  配置：在配置文件中集群運行選擇
+
+  
+
 - Blueprints:Organizing your code in namespaces 
+
+  藍圖，組織你的代碼在命令空間
+
+  
 
 - Error handing and debugigng: Dealing with errors in your app 
 
+  控制錯誤和調試，在你的web application中解決錯誤
+  
+  
+  
   
 
 #### Session
 
+it's a dict-like object,which Quart serializes into a cookie on the usersiede.
+
+這是一個類似於dict的對象，Quart將其序列化為使用者介面上的cookie。
+
+The data contained in the session mapping is dumped into a JSON mapping ,then compressed using zlib to make it smaller and finally encoded in base64 
+
+會話映射中包含的數據被轉儲到JSON映射中，然後使用zlib進行壓縮以使其更小，最後用base64進行編碼
+
+When the session gets serialized the itsdangerous library signs the content using a secret_key value defined in the application
+
+當會話被序列化時，它的危險庫使用application中定義的secret_key值對內容進行簽名
+
+This signature, which is added to the data as a suffix, ensures that the client cannot tamper with the data that is stored in a cookie unless they know the secret key to sign the session value
+
+此簽名作為尾碼添加到數據中，確保用戶端不會篡改存儲在cookie中的數據，除非他們知道用於簽名會話值的金鑰
+
+
+
+However, when you're building microservices that are not producing HTML, you rarely rely on cookies as they are specific to web browsers.
+
+然而，當您構建不生成HTML的微服務時，您很少依賴cookie，因為它們是特定於web瀏覽器的。
+
+However,the idea of keeping a.volatile key-value storage for each user can be extremely useful for speeding up some of these server-side work .
+
+然而，為每個用戶保留vatile鍵值存儲的想法對於加快某些伺服器端工作非常有用。
+
+
+
+
+
 #### Globals
+
+Quarts provides a mechanism for storing global variables that are unique to a particular request context,that i<u>s used for request and session,but is also avaible to store any custom object</u> 
+
+適用於請求，session和存儲自定義的對象 
+
+> It's a typical pattern in Quart to use before_request to set values in the globals. That way, all the functions that are called within the request context can interact with the special global variable called g and get the data. In the following example, we copy the username provided when the client performs an HTTP Basic Authentication in the user attribute:
+
+
+
+```python
+from quart import Quart,g,request 
+app = Quart(__name__)
+
+@app.before_request
+def auth():
+    if request.authorization:
+        g.user = request.authorization['username']
+    else:
+        g.user = 'Anonymous'
+
+@app.route("/api")
+def my_microservice():
+    return {"hello":g.user}
+
+if __name__ =='__main__':
+    app.run(debug=True)
+```
+
+
 
 #### Signals
 
+Sometimes in an application, we want to send a message from one place to another, when components are not directly connected. One way in which we can send such messages is to use signals.
+
+傳輸數據並不是直接傳輸的
+
+
+
+Registering to a particular event is done by calling the signal's connect method,Signals are triggered when someone calls the signal's send method The send method accepts extra arguments to pass data to all the registered functions
+
+ 通過調用訊號的connect方法來注册特定事件。當有人調用訊號的send方法時，會觸發訊號。send方法接受額外的參數，將數據傳遞給所有注册的函數
+
+```python
+from quart import Quart,g,request_finished
+from quart.signals import signals_available
+
+app = Quart(__name__)
+def finished(sender,response,**extra):
+    print("About to send a Response")
+    print(response)
+
+request_finished.connect(finished)
+@app.route("/api")
+async def my_microservice():
+    return {"hello":"world"}
+
+if __name__=='__main__':
+    app.run(debug=True)
+    
+```
+
+
+
+
+
 #### Extensions and middleware 
+
+Quart extensions are simply Python project that,once installed ,provide a package or a module named quart_something .They can be userful for avoiding having to reinvent anything when wanting to do things such as authentication or sending an email
+
+Quart擴展是一個簡單的Python項目，一旦安裝，它就提供一個名為Quart_something的包或模塊。當需要進行身份驗證或發送電子郵件等操作時，Quart擴展可以使用戶無需重新設計任何東西
+
+> to import Flask's login extension,use the following commands
+
+```python
+import quart.flask_patch 
+import flask_login
+```
+
+
+
+```python
+# 包錯
+#AttributeError: 'list' object has no attribute 'raw_items'
+from quart import Quart, request
+from werkzeug.datastructures import Headers
+
+
+class XFFMiddleware(object):
+    def __init__(self, app, real_ip="10.1.1.1"):
+        self.app = app
+        self.real_ip = real_ip
+
+    async def __call__(self, scope, receive, send):
+        if "headers" in scope and "HTTP_X_FORWARDED_FOR" not in scope["headers"]:
+            new_headers = scope["headers"].raw_items() + [
+                (
+                    b"X-Forwarded-For",
+                    f"{self.real_ip}, 10.3.4.5, 127.0.0.1".encode(),
+                )
+            ]
+            scope["headers"] = Headers(new_headers)
+        return await self.app(scope, receive, send)
+
+
+app = Quart(__name__)
+app.asgi_app = XFFMiddleware(app.asgi_app)
+
+
+@app.route("/api")
+def my_microservice():
+    if "X-Forwarded-For" in request.headers:
+        ips = [ip.strip() for ip in request.headers["X-Forwarded-For"].split(",")]
+        ip = ips[0]
+    else:
+        ip = request.remote_addr
+
+    return {"Hello": ip}
+
+
+if __name__ == "__main__":
+    app.run()
+```
+
+
 
 #### Templates 
 
+Jinja模板來發送郵件等歡迎界面
+
+```python
+from datetime import datetime
+from jinja2 import Template
+from email.utils import format_datetime
+import time 
+def render_email(**data):
+    with open("email_template.j2") as f:
+        template = Template(f.read())
+    return template.render(**data)
+
+
+data = {
+    # 'data':time.time(),# 不顯示why
+    'to':"danyow@danyow.com",
+    'from':'danyowChan',
+    'subject':'shopping',
+    'name':'ac', 
+    'items':[
+        {"name":'a','price':1},
+        {"name":'a','price':1},
+        {"name":'a','price':1},
+    ],
+}
+print(render_email(**data))
+
+```
+
+
+
 #### Configuration
 
+Quart uses a mechanism similar to Django in its configuration approach. The Quart object comes with an object called config, which contains some built-in variables, and which can be updated when you start your Quart app via your configuration objects. For example, you can define a Config class in a Python-format file as follows:
+
+Quart在其配寘方法中使用了類似Django的機制。 Quart對象附帶一個名為config的對象，其中包含一些內寘變數，可以在您通過配寘對象啟動Quart應用程序時進行更新。 例如，可以在Python格式檔案中定義Config類，如下所示：
+
+```python
+class Config:
+    DEBUG = False 
+    SQLURI  = 'postgres://username:xxx@localhost/db'
+
+'''
+可以添加到代碼中
+from quart import Quart
+>>> import pprint
+>>> pp = pprint.PrettyPrinter(indent=4)
+>>> app = Quart(__name__)
+>>> app.config.from_object('prod_settings.Config') >>> pp.pprint(app.config)
+'''
+
+
+'''
+很容易添加json，yaml等配置
+>>> from quart import Quart
+>>> import yaml
+>>> from pathlib import Path
+>>> app = Quart(__name__)
+>>> print(Path("prod_settings.json").read_text()) {
+    "DEBUG": false,
+    "SQLURI":"postgres://username:xxx@localhost/db"
+}
+>>> app.config.from_json("prod_settings.json") >>> app.config["SQLURI"] 'postgres://username:xxx@localhost/db'
+>>> print(Path("prod_settings.yml").read_text()) ---
+DEBUG: False
+SQLURI: "postgres://username:xxx@localhost/db"
+>>> app.config.from_file("prod_settings.yml", yaml.safe_load)
+'''
+```
+
+You can give from_file a function to use to understand the data, such as yaml.safe_load, toml.load, and json.load. If you prefer the INI format with [sections] along with name = value, then many extensions exist to help, and the standard library's ConfigParser is also straightforward.
+
+
+
 #### Blueprints
+
+When you write microservices that have more than a single endpoint, you will end up with a number of different decorated functions—remember those are functions with a decorator above, such as @app.route. <u>The first logical step to organize your code is to have one module per endpoint,</u> 
+
+
+
+
+
+Blueprints take this logic a step further by providing a way to group your views into namespaces, making the structure used in separate files and giving it some special framework assistance. You can create a Blueprint object that looks like a Quart app object, and then use it to arrange some views. The initialization process can then register blueprints with app.register_blueprint to make sure that all the views defined in the blueprint are part of the app. A possible implementation of the employee's blueprint could be as follows:
+
+藍圖通過提供一種將視圖分組到名稱空間的方法，使結構在單獨的檔案中使用，並為其提供一些特殊的框架幫助，從而使這種邏輯更進一步。 您可以創建一個看起來像Quart應用程序對象的Blueprint對象，然後使用它來排列一些視圖。 然後，初始化過程可以向app.register_blueprint注册藍圖，以確保藍圖中定義的所有視圖都是應用程序的一部分。 員工藍圖的可能實施管道如下：
+
+```python
+from quart import Blueprint 
+teams = Blueprint('teams',__name__)
+
+_DEVS = ['ALICE','BOB']
+_OPS = ['Charles']
+_TEAMS = {1:_DEVS,2:_OPS}
+
+@teams.route('/teams')
+def get_all():
+    return _TEAMS
+
+@teams.route("/teams/<int:team_id>")
+def get_team(team_id):
+    return _TEAMS[team_id]
+
+```
+
+The main module (app.py) can then import this file, and register its blueprint with app.register_blueprint(teams). This mechanism is also interesting when you want to reuse a generic set of views in another application or several times in the same application—it's easy to imagine a situation where, for example, both the inventory management area and a sales area might want to have the same ability to look at current stock levels.
+
+然後，主模塊（app.py）可以導入此檔案，並將其藍圖注册到app.register_blueprint（teams）。當您希望在另一個應用程序中或在同一應用程序中重複使用一組通用視圖時，這種機制也很有趣，例如， 庫存管理區域和銷售區域可能都希望具有查看當前庫存水准的相同能力。
 
 #### Error handing 
 
@@ -735,4 +1017,6 @@ if __name__=='__main__':
 
 
 ### A microservice skeleton微服務框架
+
+
 
