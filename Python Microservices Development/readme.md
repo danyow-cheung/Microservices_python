@@ -1083,5 +1083,107 @@ if __name__ =='__main__':
 
 ### A microservice skeleton微服務框架
 
+how to organize the code in your projects,and how to instantiate your Quart app.-> `app.run()`
+
+
+
+The microservice project on GitHub was created for this book and is a generic Quart project that you can use to start a microservice.
+
+The microservice project skeletioin contains the following structure
+
+- **setup.p**y :Distutils's setup file,which is used to install and release the project
+- Makefile:A makefile that contains a few useful targets to make,build and ,run the project
+- **settings.yaml**:The application default settings in a YAML file 
+- **requirements.txt**:The project dependencies following the pip format produced by pip freeze 
+- **myservices/**:The actual package
+  - `__init_.py`
+  - app.py:The app module,which contains the app itself
+  - views/:A directory containing the views organized in blueprints 
+    - `__init__.py`:
+    - home.py:The home blueprint,which serves the root endpoint
+  - tests/:
+    - `__init__.py`:
+    - test_home.py:Tests for the home blueprint views 
+
+
+
+
+
+# Chapter3:Coding ,Testing and Documentation:the Virtuous Cycle編碼、測試和檔案：良性迴圈
+
+**Test-Driven Development測試驅動開發**
+
+is an approach where you write tests alongside the code you are creating and use the tests to guide what the code should do—and to demonstrate that it works as you expect.
+
+是一種方法，您可以在創建的程式碼旁邊編寫測試，並使用測試來指導程式碼應該做什麼，並證明它按照您的預期工作。
+
+**Behavior-Driven Development 行為驅動發展**
+
+
+
+is another approach that can work well in combination with TDD. Using this method, tests describe the desired behavior of the software from a higher-level point of view and are often presented in more human- friendly language是另一種可以與TDD結合使用的方法。 使用這種方法，測試從更高層次的角度描述軟件的期望行為，並且通常以更人性化的語言呈現
+
+
+
+a good set of tests should demonstrate that the software does what we intend it to do and that it should fail in a predictable and fixable way
+
+> That means that if you give it invalid data or a dependency it relies on has broken,the behaviour of the code is predictable
+
+
+
+## Different kinds of tests 不同類型的測試
+
+- Unit tests:單元測試
+
+  these make sure a class or a function works as expected in isolation
+
+- Functional tests:功能測試
+
+  Verify that the microservice does what it says from the consumer's point of view,and behaves correctly,even upon receiving bad requests.
+
+  
+
+- Integration tests:集成測試
+
+  Verify how a microservice integrates with all its network dependencies
+
+- Load tests:負載測試
+
+  Measure the microservice performances 
+
+- End-to-end tests:端到端測試
+
+  Verify that the whole system works-from initial request to final action--through all its components
+
+  
+
+  
+
+  
+
+  
+
+  
+
+### Unit tests
+
+### Functional tests
+
+### Intergration tests:
+
+### Load tests:
+
+### End-to-End tests
+
+## Using pytest and tox 
+
+## Developer documentation
+
+## Version control
+
+## Continuous Intergration and Contonuous Deployment 
+
+
+
 
 
