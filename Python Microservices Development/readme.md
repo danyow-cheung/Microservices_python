@@ -1141,8 +1141,6 @@ a good set of tests should demonstrate that the software does what we intend it 
 
   Verify that the microservice does what it says from the consumer's point of view,and behaves correctly,even upon receiving bad requests.
 
-  
-
 - Integration tests:集成測試
 
   Verify how a microservice integrates with all its network dependencies
@@ -1159,15 +1157,31 @@ a good set of tests should demonstrate that the software does what we intend it 
 
   
 
-  
+### Unit tests單元測試
 
-  
+Unit tests are the simplest and most self-contained tests to add to a project 
 
-  
+單元測試是添加到項目中的最簡單、最獨立的測試
 
-### Unit tests
 
-### Functional tests
+
+In some cases,it will be useful to mock these calls to achieve isolation.<u>Mocking means replacing a piece of code with a fake version which will return the value you need for the test,but fake the behaviour that the real code performs</u> 
+
+
+
+Mocking comes with its own risks,problem often occurs when u update your project's dependencies,or an external service changes what it sends,and your mock are not updated reflect the new behaviors
+
+
+
+### Functional tests功能測試
+
+Functional tests for a microservice project are all the tests that interact with the published API by sending HTTP requests,and asserting that the HTTP response are the expected ones.
+
+微服務專案的功能測試是通過發送HTTP請求並斷言HTTP響應是預期響應來與發佈的API互動的所有測試。
+
+
+
+
 
 ### Intergration tests:
 
