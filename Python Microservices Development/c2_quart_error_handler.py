@@ -1,12 +1,24 @@
 from quart import Quart
 app = Quart(__name__)
 
+text_404 = (
+    'The requested URL was not found on the server.'
+    'If you entered the URL manually please check your.'
+    'spelling and try again'
+)
+
 @app.errorhandler(500)
 def error_handling(error):
     return {"Error":str(error)},500 
 
+@app.errorhandler(404)
+def error_handling(error):
+    return {"Error":str(error),'Description':text_404} ,404 
+
+
+
 @app.route("/api")
 def my_microservice():
-    raise TypeError('SomeException')
+    raise TypeError('This is a testing exception')
 if __name__ =='__main__':
     app.run(debug=True)

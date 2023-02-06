@@ -1181,23 +1181,184 @@ Functional tests for a microservice project are all the tests that interact with
 
 
 
+These differ from unit tests because they focus more on the behavior of a microservice, or a smaller part of a larger service.
+
+與單元測試不同的是，功能測試更加注重於微服務的行為，或者較大微服務的小部分內容
 
 
-### Intergration tests:
 
-### Load tests:
+The key part of a functional test is to investigate whether the software's behaviour meets its requirements.As a developers ,the two most important kinds of functional tests we should focus on are the following功能測試的關鍵部分是調查軟件的行為是否符合其要求。作為開發人員，我們應該關注以下兩種最重要的功能測試
 
-### End-to-End tests
+- Tests that verify that the application does what it was built for 驗證應用程序執行其構建目的的測試
 
-## Using pytest and tox 
+- Tests that ensure an abnormal behaviour that was fixed is not happening anymore 確保已修復的异常行為不再發生的測試
+
+  
+
+Quart includes a QuartClient class to build requests, which can be created directly from the app object using its test_client() method. The following is an example of a test against the quart_basic app we showed in *Chapter 2*, *Discovering Quart*, which sends back a JSON body on /api/:
+
+```python
+import unittest
+import json 
+from quart_basic import app as test_app 
+class TestApp(unittest.IsolatedAsyncioTestCase):
+  async def test_help(self):
+    app = tested_app.test_client()
+    hello = await app.get('/api')
+    body = json.load(str(await hello.get_data(),'utf-8'))
+    self.assertEqual(body['Hello'],"WORLD!")
+if __name__ =='__main__':
+  unittest.main()
+```
+
+寫一個測試c2_quart_error.py的文件
+
+
+
+
+
+
+
+### Intergration tests::集成測試
+
+Intergration tests are functional tests without any mocking and should be able to run on a real deployment of your application,
+
+集成測試是功能測試，沒有任何mock，應該能够在應用程序的實際部署上運行，
+
+
+
+
+
+### Load tests:負載測試
+
+The goal of a load test is to understand how your service performs under stress.
+
+負載測試的目標是瞭解您的服務在壓力下的表現。
+
+
+
+### End-to-End tests端到端測試
+
+each change you make in your code should include a new test or modify an existing one.
+
+
+
+## Using pytest and tox 使用pytest和tox
+
+使用命令
+
+`pytest test_*`
+
+
+
+Once you have installed tox (using the pip install tox command), it requires a configuration file called tox.ini in the root directory of your project. 
+
+```
+[tox]
+envlist =py38,py39
+
+[testenv]
+deps = pytest 
+	pytest-conv 
+	pytest-flake8
+commands = pytest --conv=quart_basic --flake8 test_*
+```
+
+
+
+
 
 ## Developer documentation
 
+balha
+
+
+
 ## Version control
 
-## Continuous Intergration and Contonuous Deployment 
+Git
+
+## Continuous Intergration and Contonuous Deployment 持續集成和控制部署
+
+A Continuous Integration(CI) system solves this issue by listening for changes in your version control system for the right time to run the commands you decide on, and will often take care of the different environments for you. 
+
+持續集成（CI）系統通過在正確的時間偵聽版本控制系統中的更改以運行您决定的命令來解决此問題，並且通常會為您處理不同的環境。
 
 
 
 
+
+
+
+# Chapter 4:Designing Jeeves設計Jeeves
+
+> In *Chapter 1*, *Understanding Microservices*, we said that the natural way to build
+>  a microservices-based app is to start with a monolithic version that implements all the features, and then to split it into microservices that make the most sense.
+
+The chapter is organized into two main sections:
+
+- Presentation of our application and its user stories
+- How Jeeves can be built as a monolithic application
+
+
+
+
+
+## The Jeeves bot Jeeves機器人
+
+Jeeves will be our personal assistant—a name taken from the stories of *P. G. Wodehouse*—and used for other software bots and at least one search engine.
+
+ 
+
+
+
+
+
+## User stories用戶故事
+
+
+
+## Monolithic design單片設計
+
+The first thing to consider is the retrieval of data from Slack into our application. There will be a single endpoint for this, as Slack sends all its events to the URL that the application developer configures. 
+
+### Model
+
+For Jeeves,the database tables are :
+
+- User:This contains information about each user,including their credentials
+
+- Service:This is a list of the avaible services the bot can provide,and whether or not they are active 
+
+  
+
+- Log:A log of bat activity
+
+Using the **SQLAlchemy**(https://www.sqlalchemy.org/) library, each table is created as a subclass of the base class provided by the module, allowing us to avoid duplicating effort and leaving the classes in our own code clean and focused on the data that we want to work with. SQLAlchemy has asynchronous interfaces that can be used to keep the performance benefits of our async application while accessing the database. To use these features, we must install both sqlalchemy and aiosqlite. 
+
+每個錶都是作為模塊提供的基類的子類創建的，這樣我們就可以避免重複工作，讓我們自己的程式碼中的類保持乾淨，專注於我們想要處理的數據。 SQLAlchemy具有非同步介面，可用於在訪問資料庫時保持非同步應用程序的效能優勢。 要使用這些功能，我們必須同時安裝sqlalchemy和aiosqlite。
+
+
+
+### view and template
+
+### A human-readable view
+
+### Siack workspace
+
+
+
+### Taking actions 
+
+### OAuth tokens 
+
+### Authentication authorization
+
+### Background tasks 
+
+
+
+
+
+## Putting together the monolithic design
 
