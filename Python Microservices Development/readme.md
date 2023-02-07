@@ -1322,7 +1322,7 @@ Jeeves will be our personal assistant—a name taken from the stories of *P. G. 
 
 The first thing to consider is the retrieval of data from Slack into our application. There will be a single endpoint for this, as Slack sends all its events to the URL that the application developer configures. 
 
-### Model
+### Model模型
 
 For Jeeves,the database tables are :
 
@@ -1338,23 +1338,209 @@ Using the **SQLAlchemy**(https://www.sqlalchemy.org/) library, each table is cre
 
 每個錶都是作為模塊提供的基類的子類創建的，這樣我們就可以避免重複工作，讓我們自己的程式碼中的類保持乾淨，專注於我們想要處理的數據。 SQLAlchemy具有非同步介面，可用於在訪問資料庫時保持非同步應用程序的效能優勢。 要使用這些功能，我們必須同時安裝sqlalchemy和aiosqlite。
 
+```python
+from sqlalchemy.ext.asyncio import create_async_engine,AsyncSession
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Column, Integer, String, Boolean, JSON
+from sqlalchemy.orm import Session
+from sqlalchemy.future import select
+from sqlalchemy import update
+
+# 初始化數據庫
+DATABASE_URL = 'sqlite+aiosqlite:///./test.db'
+engine = create_async_engine(
+    DATABASE_URL,
+    future=True,
+    echo=True
+)
+
+async_session = sessionmaker(engine,expire_on_commit=False,class_ = AsyncSession)
+Base = declarative_base()
+
+# data Model
+class User(Base):
+    __tablename__ = 'user'
+    id = Column(Integer,primary_key=True,autoincrement=True)
+    name = Column(String)
+    email = Column(String)
+    slack_id = Column(String)
+    password = Column(String)
+    config = Column(String)
+    is_activate = Column(Boolean,default=True)
+    is_admin = Column(Boolean,default=False)
+    
+    def json(self):
+        return {"id":self.id,"email":self.email,'config':self.config}
+    
+'''data access layer(DAL)'''
+class UserDAL:
+    def __init__(self,db_session):
+        self.db_session = db_session
+    
+    async def create_user(self,name,email,slack_id):
+        new_user = User(name=name,email=email,slack_id=slack_id)
+        self.db_session.add(new_user)
+        await self.db_session.flush()
+        return new_user.json()
+    
+    async def get_all_users(self):
+        query_result = await self.db_session.execute(select(User).order_by(User.id))
+        return {"Users":[user.json() for user in query_result.sclars().all()]}
+
+    async def get_user(self,user_id):
+        query = select(User).where(User.id==user_id)
+        query_result = await self.db_session.execute(query)
+        user = query_result.one()
+        return user[0].json()
+    
+
+'''With the DAL set up,we can use a feature provided by Python's own contextlib to create an asynchronous context manager'''
+@asynccontxtmanager
+async def user_dal():
+    async with async_session() as session:
+        async with session.begin():
+            yield UserDAL(session)
 
 
-### view and template
+            
+```
 
-### A human-readable view
 
-### Siack workspace
+
+### view and template視圖和模板
+
+the following Quart view will allow us to view all the users in the database when the /user endpoint is queried
+
+```python
+@app.route('/users')
+async def get_all_users():
+  async with user_dal() as ud:
+    return await ud.get_all_users()
+```
+
+
+
+
+
+### A human-readable view人類可讀視圖
+
+The following module implements a form for the User table ,using FlaskForm as its basis
+
+```python
+import quart.flask_patch 
+from flask_wtf import FlaskForm 
+import wtforms as f 
+from wtforms,validators import DataRequired 
+
+class UserForm(FlaskForm):
+  email = f.StringField("email",validators=[DataRequired()])
+  slack_id = f.StringField("Slack ID")
+  password = f.PasswordField("password")
+  display = ['email',slack_id,'password']
+  
+```
+
+
+
+### Slack workspace閒置工作區
+
+Slack allows people to connect apps to a workspace
 
 
 
 ### Taking actions 
 
+. Even without using a microservice-based design, it is far safer to create well-defined boundaries between different components.
+
+
+
+```python
+ACTION_MAP = {
+  'help':show_help_text,
+  'weather':fetch_weather,
+  'config':user_config
+}
+
+def process_message(message,metadata):
+  '''
+  Decide on an action for a chat message
+  Arguments:
+  	message(str):		The body of the chat message 
+  	metadata(dict): Data about who sent the message,the time and channel
+  '''
+  reply = None 
+  for test,action in ACTION_MAP.items():
+    if message.startswith(test):
+      reply = action(message.lstrip(test),metadata)
+      break 
+   if reply:
+    	post_to_slack(reply,metadata)
+```
+
+
+
+
+
+
+
 ### OAuth tokens 
 
-### Authentication authorization
+OAuth2 allows us to make an authenticated request to someone else's site.We could request read-only access to someone's Google calendar, permission to post issues to GitHub, or the ability to read information about our recorded exercises in a fitness application
+
+OAuth2允許我們向他人的網站發出經過身份驗證的請求。我們可以請求以只讀管道訪問他人的穀歌行事曆、向GitHub發佈問題的許可權，或者在健身應用程序中讀取有關我們記錄的鍛煉的資訊
+
+```python
+import os 
+import aiohttp 
+from quart import Quart,request,render_template 
+
+app = Quart(__name__)
+
+@app.route("/")
+async def welcome_page():
+    client_id = os.environ['SLACK_CLIENT_ID']
+    return await render_template('welcome.html',client_id=client_id)
+
+@app.route("/slack/callback")
+async def oauth2_slack_callback():
+    code = request.args['code']
+
+    client_id = os.environ['SLACK_CLIENT_ID']
+    client_secret = os.environ['SLACK_CLIENT_SECRET']
+    access_url = f"https://slack.com/api/oauth.v2.access?client_id={client_id}&client_secret={client_secret}&code={code}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(access_url) as resp:
+            access_data = await resp.json()
+            print(access_data)
+    
+    
+    return await render_template('logged_in.html')
+if __name__=="__main__":
+    app.run(debug=True)
+    
+```
+
+
+
+
+
+### Authentication and authorization身份驗證和授權
+
+our monolithic applications is almost ready but it also requires a way to handlw authentication and authorization,Simply but 
+
+- Authentication: is proving that you are who you claim to be 身份驗證：證明你是你自稱的人
+- Authorization: is determining what actions you are permitted to perform 授權：决定允許您執行哪些操作
+
+
+
+
 
 ### Background tasks 
+
+到目前為止，我們的應用程序具有幾個功能，這些功能可以在無需用戶互動的情况下按計畫任務運行：我們的天氣操作可以檢查天氣警報
+並向他們發送消息； 行事曆動作可以在工作日開始時報告您的計畫會議； 可以製作一份已採取行動的月度報告，並通過電子郵件發送給機器人管理員。
+這些是後臺任務，它們需要在HTTP請求/響應週期之外單獨運行。 大多數作業系統都有某種形式的計畫任務功能，例如Unix上的cron或Windows中的計畫任務。 這些功能可能不適合我們的應用程序，因為這意味著我們連接到了特定的平臺，而我們在理想情况下應該是平臺無關的，並且能够在容器中運行，或者如果我們的需求發生變化，可以遷移到無服務器平臺。
+<u>在Python web應用程序中運行重複後臺任務的一種流行管道是使用Celery，這是一種分佈式任務隊列</u>，可以在獨立行程中執行一些工作： http://docs.celeryproject.org.
 
 
 
