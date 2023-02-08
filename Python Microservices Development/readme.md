@@ -1535,7 +1535,7 @@ our monolithic applications is almost ready but it also requires a way to handlw
 
 
 
-### Background tasks 
+### Background tasks 背景測試
 
 到目前為止，我們的應用程序具有幾個功能，這些功能可以在無需用戶互動的情况下按計畫任務運行：我們的天氣操作可以檢查天氣警報
 並向他們發送消息； 行事曆動作可以在工作日開始時報告您的計畫會議； 可以製作一份已採取行動的月度報告，並通過電子郵件發送給機器人管理員。
@@ -1546,5 +1546,134 @@ our monolithic applications is almost ready but it also requires a way to handlw
 
 
 
-## Putting together the monolithic design
+## Putting together the monolithic design綜合整體設計
+
+we used the following extensions and libraires 
+
+- **aiohttp**:This handles all the outgoing HTTP requests
+
+- **SQLAlchemy**:This is used for the model 
+
+- **Flask-WTF** and **WTForms** : These are used for all the forms 
+
+- **Celery and RabbitMQ**: These are used for background process and period tasks 
+
+- **quart-auth**: This is used for managing authentication and authorization
+
+  
+
+<img src = '../pic/c4_desgin.png'>
+
+无论您的应用程序正在耗尽内存、网络吞吐量、CPU处理可用性或其他瓶颈，最好的解决方案是更新
+该体系结构使得服务可以在许多不同的计算机上运行。这是横向扩展，也是使用微服务的好处之一。如果
+一个微服务需要比一台计算机所能提供的更多的I/O吞吐量来满足其所有请求，如果它可以跨数十台或数百台计算机运行，这不是问题。
+
+
+
+
+
+# Chapter 5:Splitting the Monolith折開單片
+
+in the previous chapter,we  are concerntrating on adding features rather than long-term architecture,
+
+在上一章中，我們關注的是添加功能而不是長期架構，
+
+in this chapter,we will 
+
+- Examine how to identify the best components to migrate to a new microservice based on code complexity and data we collect about usage 
+- Show techniques for preparing and performing that migration ,as well as checking on its success 
+
+
+
+## Identifying potential microservice 識別潜在的微服務
+
+There are many aspects to software and what is does --network connections,reading files,querying database,and so on.
+
+
+
+### Code complexity and maintenance代碼複雜性和維修
+
+take a data-informed approach by using tools that assess the cyclomatic complexity of the code 
+
+通過使用評估程式碼圈複雜度的工具，採用基於數據的方法
+
+
+
+**Radon** is a python tool for quickly assessing code complexity
+
+
+
+
+
+### Metrics and Monitoring 度量和監控
+
+It is easy to think of monitoring tools as being useful to alert us when something is broken, but there are other valuable uses. 人們很容易認為監控工具是有用的，可以在某些東西損壞時提醒我們，但還有其他有用的用途。
+
+
+
+```python
+import asyncio 
+from random import randint
+from aioprometheus import Gauge,Registry,Summary,inprogress,render,timer 
+from quart import Quart,request 
+
+app = Quart(__name__)
+app.registry  = Registry()
+app.api_requests_gauge  = Gauge(
+    'quart_active_requests','Number of active requests per endpoint',
+)
+app.request_timer = Summary(
+    'request_processing_seconds','Time spend processing request'
+)
+app.registry.register(app.api_requests_gauge)
+app.registry.register(app.request_timer)
+
+@app.route("/")
+@timer(app.request_timer,labels ={"path":"/"})
+@inprogress(app.api_requests_gauge,labels={"path":"/"})
+async def index_handler():
+    await asyncio.sleep(0.1)
+    return "index"
+
+@app.route("/endpoint1")
+@timer(app.request_timer,labels={'path':"/endpoint1"})
+@inprogress(app.api_requests_gauge,labels={"path":"/endpoint1"})
+async def endpoint1_handler():
+    await asyncio.sleep(randint(1000,1500)/1000.0)
+    return "endpoint1"
+
+@app.route("/endpoint2")
+@timer(app.request_timer,labels={'path':"/endpoint2"})
+@inprogress(app.api_requests_gauge,labels={"path":"/endpoint2"})
+async def endpoint2_handler():
+    await asyncio.sleep(randint(2000,2500)/1000.0)
+    return "endpoint2"
+
+@app.route("/metrics")
+async def handle_metrics():
+    return render(app.registry,request.headers.getlist('accept'))
+if __name__=="__main__":
+    app.run(debug=True)
+
+
+
+```
+
+
+
+
+
+### Logging 
+
+
+
+
+
+
+
+## Splitting a Monolith 
+
+
+
+## Refactoring Jeeves 
 
