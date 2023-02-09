@@ -1667,13 +1667,340 @@ if __name__=="__main__":
 
 
 
+```python
+import logging
+from quart import Quart,request 
+import structlog 
+from structlog import wrap_logger 
+from structlog.processors import JSONRenderer 
+
+app = Quart(__name__)
+logger = wrap_logger(
+app.logger,processors = [
+    structlog.processors.add_log_level,
+    structlog.processors.TimeStamper(),
+    JSONRenderer(indent=4,sort_keys=True),
+],)
+app.logger.setLevel(logging.DEBUG)
+
+@app.route("/hello")
+def hello_handler():
+    logger.info("hello_handler called")
+    logger.debug(f"the request was {request}")
+    return {'hello':'World!'}
+
+if __name__=='__main__':
+    app.run()
+    
+```
+
 
 
 
 
 ## Splitting a Monolith 
 
+an excellent first step with any approach is to return to our service-oriented architechture principles ,and define a clear interface between the future microservice and the rest of the application
+
+任何方法的第一步都是回到面向服務的體系結構原則，並在未來的微服務和應用程序的其他部分之間定義一個清晰的介面
+
+```python
+async def process_message(message,metadata):
+  '''Decide on an action for a chat message
+  Arguments:
+  	message(str):  The body of the chat message
+  	metadata(dict): Data about who sent the message the time and channel
+  '''
+  reply = NOne 
+  for test,action in ACTION_MAP.items():
+    if message.startwith(test):
+      reply = await action(message[len(test):]metadata)
+  		break 
+  if reply:
+    post_to_slack(reply,metadata)
+    
+# process the weather action
+async def weather_action(text,metadata):
+  if text:
+    location = text.strip()
+  else:
+    with user_dal() as ud:
+      user = ud.get_user_by_slack_id(metadata['sender'])
+      if user.location:
+        location = user.location 
+      else:
+        return "i don't know where you are "
+  return await fetch_weather(location)
+```
+
+
+
+irst, it's not easy to test the way in which the location is extracted from the received message. Two new specialist functions should help with that, and ensure that these are more easily tested—the text processing in extract_location only relies on its inputs, and fetch_user_location is now just a database lookup, which we can mock in testing:s
+
+```python
+async def extract_location(text):
+  '''extract location information from free-form text'''
+  return re.sub(r'^weather(in )?','',text)
+
+
+async def fetch_user_location(slack_id):
+  location = None 
+  with user_dal() as ud:
+    user = ud.get_user_by_slack_id(metadata[metadata['sender']])
+  location = user.location
+	return location 
+
+```
+
+
+
+The ability to generate a more complex analysis of the text to find a location within it is now easier too, as it can be done without affecting any other code. 
+
+```python
+async def process_weather_action(text,metadata):
+  potential_location = await extract_location(text)
+  if not potential_location:
+    potential_location = await fetch_user_location(metadata['sender'])
+    if pontential_location:
+      await weather_action(potential_location,metadata)
+    else:
+      await send_response("i don't know where you are ",metadata)
+
+async def weather_action(location,metadata):
+  reply = await fetch_weather(location)
+  await send_response (reply,metadata)
+```
+
+
+
+### Feature Flags
+
+Changing a large codebase often involves multiple large patches, which in professional environments will be reviewed by peers before they are accepted and merged.
+
+更改大型代碼庫通常涉及多個大型補丁，在專業環境中，這些補丁將在被接受和合併之前由同行審查。
+
+```python
+@app.route('/migrating_endpoint')
+async def migration_example():
+  if current_app.config.get('USER_NEW_WORKER'):
+    return await new_worker()
+  else:
+    return await original_worker()
+  
+@app.route('/migrating_gradually')
+async def migrating_gradually_example():
+  percentage_split = current_app.config.get('NEW_WORKER_PERCENTAGE')
+  if percentage_split and random.randint(1,100)<=percentage_split:
+    return await new_worker()
+  else:
+    return await original_worker()
+ 
+```
+
+
+
+
+
 
 
 ## Refactoring Jeeves 
+
+## workflow 
+
+Thankfully, we have a message queue! Instead of directly calling each step
+ in sequence, we can pass a message to RabbitMQ and immediately return an appropriate status code to Slack's infrastructure
+
+
+
+
+
+# Chapter 6:Interacting with Other Services與其他服務交互
+
+In this chapter ,we will explore this in detail:
+
+- How one service can call another using synchronous and asychronous libraies and how to make these calls more efficient 
+- How a service can use. messages to make asynchoronous calls and communicate with other services via events 
+- We will also see some techniques to test services that have network dependencies 
+
+
+
+## **Calling other web resources**
+
+As we have seen in the previous chapters, synchronous interactions between microservices can be done via HTTP APIs using JSON payloads. This is by far the pattern most often used, because both HTTP and JSON are common standards. 
+
+正如我們在前幾章中所看到的，微服務之間的同步互動可以通過使用JSON有效負載的HTTP API實現。 這是現時最常用的模式，因為HTTP和JSON都是通用標準。
+
+
+
+if your web service implements an HTTP API that accepts JSON,many developer usign any programming language wil be able to use it 
+
+ 
+
+ Most of these interfaces are also RESTful, meaning that they follow the **Representational State Transfer** (**REST**) architecture principles of being stateless—with each interaction containing all the information needed instead of relying on previous exchanges—as well as cacheable and having a well-defined interface.
+
+這些介面中的大多數也是RESTful的，這意味著它們遵循**RepresentationalStateTransfer**（**REST**）體系結構原則，即無狀態，每個互動都包含所需的所有資訊，而不是依賴於以前的交換以及可緩存，並具有定義良好的介面。
+
+
+
+Following a RESTful scheme is not a requirement,however and some projects implement **RemoteProcedureCall(RPC)**遠程過程調用（RPC）API 
+
+
+
+In REST, the focus is on the resource, and actions are defined by HTTP methods. 
+
+
+
+
+
+Sending and receiving JSON payloads is the simplest way for a microservice to interact with others, and only requires microservices to know the entry points and parameters to pass using HTTP requests.發送和接收JSON有效載荷是微服務與其他服務互動的最簡單管道，並且只需要微服務知道使用HTTP請求傳遞的入口點和參數。
+
+
+
+```python
+import asyncio 
+import aiohttp 
+
+async def make_request(url):
+    headers = {
+        'Content-Type':'application/json',
+    }
+    async with aiohttp.ClientSession(headers=headers) as session:
+        async with session.get(url) as response:
+            print(await response.text())
+url = 'http://localhost:5000/api'
+loop = asyncio.get_event_loop()
+loop.run_until_complete(make_request(url))
+
+```
+
+Since the most common way to request a semaphore is inside a with block, this means that as soon as the context of the with block is over, the semaphore is released—inside the semaphore object's __exit__ function:
+
+由於請求信號量最常見的管道是在with塊內，這意味著只要with塊的上下文結束，信號量就會在信號量對象的__exit_函數內釋放：
+
+```python
+import asyncio 
+import aiohttp 
+
+async def make_request(url,session,semaphore):
+    async with semaphore,session.get(url) as response:
+        print(f'Fetching {url}')
+        await asyncio.sleep(1)
+        return await response.text()
+
+async def organise_requests(url_list):
+    semaphore = asyncio.Semaphore(3)
+    task = list()
+
+    async with aiohttp.ClientSession() as session:
+        for url in url_list:
+            task.append(make_request(url,session,semaphore))
+        await asyncio.gather(*task)
+
+
+urls = [
+    "https://www.google.com",
+    "https://developer.mozilla.org/en-US/",
+    "https://www.packtpub.com/",
+    "https://aws.amazon.com/",
+]
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(organise_requests(urls))
+
+```
+
+
+
+
+
+## Finding out where to go 
+
+We want to pass in data about which URLs to use as configuration to our application. There are several options to manage more configuration options without adding them directly to the code, such as environment variables and service discovery.
+
+我們希望將關於哪些URL用作配寘的數據傳遞給我們的應用程序。 有幾個選項可以管理更多的配置選項，而無需將它們直接添加到程式碼中，例如環境變數和服務發現。
+
+
+
+### Environment variables 
+
+Container-based environments are common these days, and we will discuss them in more detail in Chapter 10, Deploying on AWS. The most common approach to get configuration options into a container is to pass the container some environment variables. This has the advantage of being straightforward, since the code just needs to examine the environment when processing its configuration:
+
+基於容器的環境現在很常見，我們將在第10章“在AWS上部署”中更詳細地討論它們。 向容器中獲取配置選項的最常見方法是向容器傳遞一些環境變數。 這具有簡單明瞭的優點，因為程式碼在處理其配寘時只需要檢查環境：
+
+```python
+import os 
+def create_app(name=__name__,blueprints=None,settings=None):
+  app = Quart(name)
+  app.config['REMOTE_URL'] = os.environ.get('OTHER_SERVICE_URL','https://default.url/here')
+  
+  
+```
+
+
+
+
+
+### Service discovery 
+
+But what if we did not need to tell our service about all its options when we deploy it? Service discovery is an approach that involves configuring an application with just a few pieces of information: where to ask for configuration and how to identify the right questions to ask.
+
+ 但是，如果我們在部署服務時不需要告訴服務它的所有選項呢？ 服務發現是一種方法，它只需要使用幾條資訊來配寘應用程序：在何處請求配寘以及如何確定要問的正確問題。
+
+
+
+
+
+## Transfering data 
+
+JSON is a human-readable data format. 
+
+
+
+### HTTP cache headers
+
+In the HTTP protocol, there are a few cache mechanisms that can be used to indicate to a client that a page that it's trying to fetch has not changed since its last visit. Caching is something we can do in our microservices on all the read-only API endpoints, such as GETs and HEADs.
+
+The simplest way to implement it is to return, along with a result, an ETag header
+ in the response. An ETag value is a string that can be considered as a version for the resource the client is trying to get. It can be a timestamp, an incremental version, or a hash. It's up to the server to decide what to put in it, but the idea is that it should be unique to the value of the response.
+
+Like web browsers, when the client fetches a response that contains such a header, it can build a local dictionary cache that stores the response bodies and ETags as its values, and the URLs as its keys.
+
+在HTTP協議中，有一些緩存機制可用於向用戶端訓示其嘗試獲取的頁面自上次訪問以來沒有發生變化。 緩存是我們可以在所有只讀API端點（如GET和HEAD）上的微服務中實現的。
+實現它的最簡單方法是返回一個ETag頭和一個結果
+在回應中。 ETag值是一個字串，可以被視為用戶端試圖獲取的資源的版本。 它可以是時間戳記、增量版本或雜湊。 由服務器决定在其中放入什麼，但其思想是，響應的值應該是唯一的。
+與web瀏覽器一樣，當用戶端獲取包含此類標頭的響應時，它可以構建一個本地字典緩存，將響應體和ETag存儲為其值，將URL存儲為其關鍵字。
+
+ 
+
+### GZIP compression
+
+
+
+### Protocol buffers 
+
+
+
+### MessagePack
+
+
+
+### Putting it together 
+
+
+
+## Asynchronous messages
+
+
+
+
+
+## Testing 
+
+
+
+## Using OpenAPI 
+
+
+
+
 
