@@ -1824,7 +1824,7 @@ In this chapter ,we will explore this in detail:
 
 
 
-## **Calling other web resources**
+## **Calling other web resources**调用其他web资源
 
 As we have seen in the previous chapters, synchronous interactions between microservices can be done via HTTP APIs using JSON payloads. This is by far the pattern most often used, because both HTTP and JSON are common standards. 
 
@@ -1913,7 +1913,7 @@ loop.run_until_complete(organise_requests(urls))
 
 
 
-## Finding out where to go 
+## Finding out where to go 找到要去的地方
 
 We want to pass in data about which URLs to use as configuration to our application. There are several options to manage more configuration options without adding them directly to the code, such as environment variables and service discovery.
 
@@ -1921,7 +1921,7 @@ We want to pass in data about which URLs to use as configuration to our applicat
 
 
 
-### Environment variables 
+### Environment variables 环境变量
 
 Container-based environments are common these days, and we will discuss them in more detail in Chapter 10, Deploying on AWS. The most common approach to get configuration options into a container is to pass the container some environment variables. This has the advantage of being straightforward, since the code just needs to examine the environment when processing its configuration:
 
@@ -1940,7 +1940,7 @@ def create_app(name=__name__,blueprints=None,settings=None):
 
 
 
-### Service discovery 
+### Service discovery 服务发现
 
 But what if we did not need to tell our service about all its options when we deploy it? Service discovery is an approach that involves configuring an application with just a few pieces of information: where to ask for configuration and how to identify the right questions to ask.
 
@@ -1950,13 +1950,13 @@ But what if we did not need to tell our service about all its options when we de
 
 
 
-## Transfering data 
+## Transfering data 传输数据
 
 JSON is a human-readable data format. 
 
 
 
-### HTTP cache headers
+### HTTP cache headers HTTP缓存头
 
 In the HTTP protocol, there are a few cache mechanisms that can be used to indicate to a client that a page that it's trying to fetch has not changed since its last visit. Caching is something we can do in our microservices on all the read-only API endpoints, such as GETs and HEADs.
 
@@ -1972,25 +1972,190 @@ Like web browsers, when the client fetches a response that contains such a heade
 
  
 
-### GZIP compression
+### GZIP compression GZIP压缩
+
+Compression is an overarching term of reducing the size of data in such a way that the original data can be recovered.
+
+压缩是一个总括性的术语，指以一种可以恢复原始数据的方式减少数据的大小。
 
 
 
-### Protocol buffers 
+解压缩数据会增加一些处理，但Python的GZIP模块依赖于zlib (http://www.zlib.net/)，它非常快。为了接受对HTTP查询的压缩响应，我们只需要添加一个头，表明我们可以处理gzip编码的响应:
+
+```python
+import asyncio 
+import aiohttp
+
+async def make_request():
+  url = 'http://127.0.0.1/api'
+  headers = {'Accept-Encoding':'gzip'}
+  async with aiohttp.ClientSession(headers=headers) as session:
+    async with session.get(url) as response:
+      print(await response.text)
+loop = asyncio.get_event_loop()
+loop.run_until_complete(make_request())
+```
+
+为了压缩你发送到服务器的数据，你可以使用gzip模块并指定一个Content-Encoding头:
+
+```python
+import asyncio 
+import aiohttp
+import gzip 
+import json 
+
+async def make_request():
+  url = 'http://127.0.0.1/api'
+  headers = {'Content-Encoding':'gzip'}
+  
+  data = {'hello':'world','result':'ok'}
+  data = bytes(json.dumps(data),'utf8')
+  data = gzip.compress(data)
+  
+  
+  async with aiohttp.ClientSession(headers=headers) as session:
+    async with session.post(url,data=data) as response:
+      print(await response.text())
+      
+loop = asyncio.get_event_loop()
+loop.run_until_complete(make_request())
+```
+
+
+
+
+
+### Protocol buffers 协议缓冲区
+
+While it is usually not relevant, if your microservice deals with a lot of data, using an alternative format can be an attractive option to increase performance, and decrease the required network bandwidth without having to use extra processing power and time compressing and decompressing the data. Two widely used binary formats are **Protocol Buffers** [protobuf](https://developers.google.com/protocol-buffers) and **MessagePack**.
+
+虽然这通常无关紧要，但如果您的微服务要处理大量数据，使用替代格式可能是一个有吸引力的选择，可以提高性能，并减少所需的网络带宽，而不必使用额外的处理能力和时间来压缩和解压数据。两种广泛使用的二进制格式是**Protocol Buffers** [protobuf](https://developers.google.com/protocol-buffers)和**MessagePack**。
+
+
+
+Protocol Buffers requires you to describe data that's being exchanged into some schema that will be used to index the binary content. The schemas add some work because all data that is transferred will need to be described in a schema, and you will need to learn a new **Domain-Specific Language** (**DSL**). In a typed language, such as Rust, C++, or Go, defining these structures is something that already has to be done, so the overhead is far less.
+
+Protocol Buffers要求您描述交换到某个模式中的数据，该模式将用于索引二进制内容。模式增加了一些工作，因为传输的所有数据都需要在模式中描述，并且您需要学习一种新的领域特定语言(DSL)。在类型化语言(如Rust、c++或Go)中，定义这些结构已经是必须要做的事情，因此开销要小得多。
+
+
 
 
 
 ### MessagePack
 
+Unlike Protocol Buffers, MessagePack (http://msgpack.org/) is schemaless, and can serialize your data by just calling a function. It's a simple alternative to JSON, and has implementations in most languages. The msgpack Python library (installed using the pip install msgpack-python command) offers the same level of integration as JSON:
+
+与协议缓冲区不同，MessagePack (http://msgpack.org/)是无模式的，可以通过调用函数来序列化数据。它是JSON的简单替代品，在大多数语言中都有实现。msgpack Python库(使用pip install msgpack- Python命令安装)提供了与JSON相同级别的集成:
+
+```python
+import msgpack
+data ={'this':'is','some':'data'}
+msgpack.pack(data,use_bin_type=True)
+msgpack.pack(msgpack.packb(data,use_bin_type=True))
+```
+
+
+
 
 
 ### Putting it together 
 
+before moving on ,we will quickly recall what we have covered so far:
+
+- Implementing HTTP cahce headers is a great way to speed up repeated requests for data 
+- GZIP compression is an efficient way to lessen the size of requests and responses and is easy to set up 
+- Binary protocols are an attractive alternative to plain JSON,but it does depend on the situation
 
 
-## Asynchronous messages
+
+## Asynchronous messages 异步消息
+
+在微服务体系结构中，当过去在单个应用程序中执行的流程现在涉及多个微服务时，异步调用起着基本作用。在前一章中，我们通过对Jeeves应用程序的更改简要地谈到了这一点，现在它使用异步消息队列与其工作者通信。为了更好地利用这些工具，我们将更深入地研究这些工具。
 
 
+
+异步调用可以像微服务应用程序中的一个单独的线程或进程一样简单，它正在接收一些要完成的工作，并在不干扰同时发生的HTTP请求/响应往返的情况下执行它。
+但是直接从相同的Python进程执行所有操作不是很健壮。如果进程崩溃并重新启动，会发生什么?如果后台任务是这样构建的，我们如何扩展后台任务呢?
+
+
+
+发送由另一个程序选择的消息更可靠，并让微服务专注于其主要目标，即为客户端提供响应。如果web请求不需要立即回答，那么我们服务中的端点可以变成代码，接受HTTP请求，处理它，并传递它，它对客户端的响应现在是我们的服务是否成功接收到请求，而不是请求是否被处理。
+
+
+
+在前一章中，我们研究了如何使用Celery来构建一个微服务，它可以从像RabbitMQ这样的消息代理那里获得一些工作。在这种设计中，芹菜工作线程阻塞——也就是说，它在等待时停止操作——直到新消息添加到RabbitMQ队列中。
+
+
+
+### Message queue reliability 消息队列可靠性
+
+we would like to add a message to the queue and have it delivered—and acted upon—exactly once. In practice this is almost impossible to achieve in a distributed system, as components fail, experiencing high latency or packet loss, while all sorts of complex interactions occur.
+
+我们希望将一条消息添加到队列中，并将其交付(并执行)一次。实际上，这在分布式系统中几乎是不可能实现的，因为在各种复杂的交互发生时，组件会出现故障，经历高延迟或包丢失。
+
+
+
+we have two real choices,encoded in RabbitMQ's delivery strategies 'at-most-once' and 'at-least-once'
+
+我们有两个真正的选择，在RabbitMQ的交付策略中编码为'at-most-once'和'at-least-once'
+
+
+
+最多交付一次消息的策略不会解释消息交付系统中的任何不可靠性或工作人员中的故障。一旦工作人员接受了消息，消息队列就会忘记它。如果工人随后遭遇失败，没有完成分配给他的大块工作，这是更广泛的系统需要处理的问题。
+
+有了至少一次传递消息的承诺，在任何失败的情况下，传递将再次尝试，直到一个工作者接受消息并承认它已经对它进行了操作。这确保了没有数据丢失，但这确实意味着在某些情况下，消息可以传递给多个工作人员，因此某种通用唯一标识符(UUID)是一个好主意，这样虽然某些工作可能会重复，但当将其写入任何数据库或存储时，它可以被重复删除。关于分布式系统可靠性和像PAXOS这样的共识协议的更广泛的讨论将需要一本书。
+
+
+
+
+
+### Basic queues 基本隊列
+
+One service pushes messages into a specific queue,and some workers pick them up from the other end and perform an action on them,
+
+
+
+<img src ='../pic/basic_queue.png'>
+
+
+
+没有双向通信—发送方只是在队列中存放消息并离开。下一个可用的工作人员将获得下一个消息。当您想要执行一些异步并行任务时，这种盲目的单向消息传递非常完美，这使得它易于扩展。
+此外，一旦发送方确认消息已添加到代理，我们就可以让消息代理(如rabbitmq)提供一些消息持久性。换句话说，如果所有工作线程都脱机，我们不会丢失队列中的消息。
+
+
+
+### Topic exchanges and queues 主题交换和队列
+
+主题是一种过滤和分类在队列中传递的消息的方法。当使用主题时，发送的每条消息都带有一个额外的标签，帮助识别它是什么类型的消息，我们的员工可以订阅特定的主题，或者匹配几个主题的模式。
+
+
+
+```python
+from pika import BlockingConnection,BasicProperties
+
+def message(topic,message):
+  connection = BlockingConnection()
+  try:
+    channel = connection.channel()
+    props = BasicProperties(content-type='text/plain',delivery_mode=1)
+    channel.basic_publish('incoming',topic,message,props)
+  finally:
+    connection.close()
+
+message("publish.playstore", "We are publishing an Android App!")
+message("publish.newsletter", "We are publishing a newsletter!")
+
+```
+
+
+
+
+
+
+
+### Publish/subscribe 
+
+pass 
 
 
 
@@ -1998,9 +2163,105 @@ Like web browsers, when the client fetches a response that contains such a heade
 
 
 
+```python
+import asyncio
+import aiohttp 
+
+import pytest 
+from aioresponses import aioresponses 
+
+@pytest.fixture
+def mock_aioresponse():
+    with aioresponses() as m:
+        yield m 
+
+@pytest.mark.asyncio
+async def test_ctx(mock_aioresponse):
+    async with aiohttp.ClientSession() as session:
+        mock_aioresponse.get("http://test.example.com", payload={"foo":
+"bar"})
+        resp = await session.get("http://test.example.com")
+        data = await resp.json()
+    assert {"foo": "bar"} == data
+```
+
+In this example, we tell aioresponses that any GET request made to http://test. example.com should return the data we specify. This way we can easily provide mocked responses for several URLs, and even the same URL by invoking mocked.get more than once to create multiple responses for the same endpoint.
+
+在本例中，我们告诉aioresponses任何GET请求都发送到http://test。Example.com应该返回我们指定的数据。通过这种方式，我们可以轻松地为多个URL提供模拟响应，甚至通过调用被模拟的URL提供相同的响应。获取多个信息，为同一个端点创建多个响应。
+
+
+
 ## Using OpenAPI 
 
 
 
+The OpenAPI Specification (https://www.openapis.org/), previously known as Swagger, is a standard way of describing a set of HTTP endpoints, how they are used, and the structure of the data that is sent and received. By describing an API using a JSON or YAML file, it allows the intent to become machine-readable—this means that with an OpenAPI Specification, you can use a code generator to produce a client library in a language of your choosing, or to automatically validate data as it enters or leaves the system.
 
+OpenAPI has the same goal that WSDL (https://www.w3.org/TR/2001/NOTE- wsdl-20010315) had back in the XML web services era, but it's much lighter and straight to the point.
+
+The following example is a minimal OpenAPI description file that defines one single /apis/users_ids endpoint and supports the GET method to retrieve the list of user IDs:
+
+
+
+OpenAPI规范(https://www.openapis.org/)，以前称为Swagger，是描述一组HTTP端点、如何使用它们以及发送和接收的数据结构的标准方法。通过使用JSON或YAML文件描述API，它允许意图变成机器可读——这意味着使用OpenAPI规范，您可以使用代码生成器以您选择的语言生成客户端库，或者在数据进入或离开系统时自动验证数据。
+OpenAPI的目标与WSDL (https://www.w3.org/TR/2001/NOTE- WSDL -20010315)在XML web服务时代的目标是一样的，但是它更简单，更直奔主题。
+下面的例子是一个最小的OpenAPI描述文件，它定义了一个单一的/apis/users_ids端点，并支持GET方法来检索用户id列表:
+
+
+
+
+
+# Chapter 7: Securing your service 保障你的服務
+
+
+
+## The OAuth2 protocol
+
+
+
+The potential for security leaks multiplies with the number of different places an identity is stored, and how many routes a password can
+ take through the different systems involved.
+
+安全泄漏的可能性随着身份存储的不同位置的数量以及密码可以通过的路由的数量而增加
+仔细研究所涉及的不同系统。
+
+
+
+
+
+OAuth2 is a standard that is widely adopted for securing web applications and their interactions with users and other web applications.
+
+OAuth2是一个被广泛采用的标准，用于保护web应用程序及其与用户和其他web应用程序的交互。
+
+<img src= '../pic/OAuth2.png'>
+
+
+
+
+
+
+
+## X.509 certificate-based authenitication
+
+The X.509 standard (https://datatracker.ietf.org/doc/html/rfc5280) is used to secure the web. Every website using TLS—the ones with https:// URLs—has an X.509 certificate on its web server, and uses it to verify the server's identity and set up the encryption the connection will use.
+
+X.509标准(https://datatracker.ietf.org/doc/html/rfc5280)用于保护网络。每个使用tls的网站——那些带有https:// url的网站——在其web服务器上都有一个X.509证书，并使用它来验证服务器的身份并设置连接将使用的加密。
+
+
+
+## Token-based authentication
+
+
+
+## The TokenDealer microservice
+
+
+
+##  
+
+## Securing your code 
+
+
+
+## Web application firewall
 
