@@ -2251,15 +2251,236 @@ X.509标准(https://datatracker.ietf.org/doc/html/rfc5280)用于保护网络。�
 
 ## Token-based authentication
 
+正如我们前面所说的，当一个服务希望在没有任何用户干预的情况下访问另一个服务时，我们可以使用CCG流。CCG背后的思想是，服务可以连接到身份验证服务并请求令牌，然后它可以使用令牌对其他服务进行身份验证。
+
+
+
+a token is usually built as a complete proof that you have permission to use a service,It is complete because it is possible to validate the token with the authentications service without knowing anything else.or having to query an external resource. Depending on the implementation, a token can also be used to access different microservices.
+
+令牌通常被构建为您拥有使用服务权限的完整证明，它是完整的，因为可以在不知道其他任何事情的情况下使用身份验证服务验证令牌。或者必须查询外部资源。根据实现的不同，令牌还可以用于访问不同的微服务。
+
+
+
+OAuth2 uses the JWT standard for its tokens,There is nothing in OAuth2 that requires the use of JWT -it just  happens to be a good fit for what OAuth2 wants to do.OAuth2使用JWT标准作为它的令牌，OAuth2中没有任何东西需要使用JWT——它恰好很适合OAuth2想要做的事情。
+
+
+
+### The JWT standard 
+
+JWT = Json Web Token 
+
+A JWT is a long string composed of three dot-separated parts:JWT是由三个点分隔的部分组成的长字符串:
+
+- A header:这提供了关于令牌的信息，例如使用哪种散列算法
+
+  
+
+- A playload:这是实际数据
+
+  
+
+- A signature:这是头和有效负载的带符号散列，用于验证它是否合法
+
+Each part in the token above is separated by a line break for display purposes—the original token is a single line. You can experiment with JWT encoding and decoding using a utility provided by Auth0 at https://jwt.io/.
+
+出于显示的目的，上面标记中的每个部分都由换行符分隔——原始标记是一行。您可以使用Auth0在https://jwt.io/上提供的实用程序来试验JWT编码和解码。
+
+```python
+import base64 
+def decode(data):
+  # adding extra = for padding if needed 
+  pad = len(data)%4 
+  if pad>0:
+    data += '='*(4-pad)
+  return base64.urlsafe_b64decode(data)
+
+decode("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9")
+# b'{"alg":"HS256","typ":"JWT"}'
+```
+
+
+
+These headers give us a lot of flexibility to control how long our tokens will stay valid. Depending on the nature of the microservice, the token **Time-To-Live** (**TTL**) can be anything from very short to infinite.
+
+
+
+### PyJWT 
+
+In Python, the PyJWT library provides all the tools you need to generate and read back JWTs: 
+
+一旦pip安装了pyjwt(和密码学)，就可以使用encode()和decode()函数来创建令牌。在下面的例子中，我们将使用HMAC-SHA256创建一个JWT并读取它。当读取令牌时，通过提供秘密来验证签名:
+
+```python
+import jwt 
+def create_token(alg='HS256',secret='secret',data=None):
+  return jwt.encode(data,secret,algorithm=alg)
+
+def read_token(token,secret='secret',algs=['HS256']):
+  return jwt.decode(token,secret,algorithms=algs)
+
+token = create_token(data={'some':'data',"inthe":'token'})
+print(token)
+print(read_token(token))
+```
+
+
+
+
+
+
+
+### Using a certificate with JWT 使用带有JWT的证书
+
+To simplify matters for this example, we will use the letsencrypt certificates we generated for nginx earlier on. If you are developing on a laptop or container that is not available from the internet, you may need to generate those certificates using a cloud instance or a certbot DNS plugin and copy them to the right place.为了简化这个例子，我们将使用之前为nginx生成的letsencrypt证书。如果你是在笔记本电脑或容器上进行开发，那么你可能需要使用云实例或certbot DNS插件生成这些证书，并将它们复制到正确的位置。
+
+If certbot generated the certificates directly, they will be available in /etc/ letsencrypt/live/your-domain/. To start with, we are interested in these two files:
+
+- cert.pem, which contains the certificate
+
+- privkey.pem, which has the RSA private key
+
+  In order to use these with PyJWT, we need to extract the public key from the certificate:
+
+  ```
+    openssl x509 -pubkey -noout -in cert.pem  > pubkey.pem
+  ```
+
+
+
+**RSA** stands for **Rivest, Shamir, and Adleman**, the three authors. The RSA encryption algorithm generates crypto keys that can go up to 4,096 bytes, and are considered secure.
+
+From there, we can use pubkey.pem and privkey.pem in our PyJWT script to sign and verify the signature of the token, using the RSASSA-PKCS1-v1_5 signature algorithm and the SHA-512 hash algorithm:
+
+**RSA**代表**Rivest, Shamir和Adleman**，三位作者。RSA加密算法生成的加密密钥最大可达4096字节，被认为是安全的。
+
+从那里，我们可以使用pubkey。Pem和privkey。在PyJWT脚本中使用RSASSA-PKCS1-v1_5签名算法和SHA-512哈希算法来签名和验证令牌的签名:
+
+```python
+import jwt 
+with open('pubkey.pem')as f:
+  PUBKEY = f.read()
+  
+with open('privkey.pem') as f:
+  PRIVKEY = f.read()
+
+def create_token(**data):
+  return jwt.encode(data,PRIVKEY,algorithm='RSS512')
+
+def read_token(token):
+  return jwt.decode(token,PUBKEY,algorithms='RS512')
+
+token = create_token(some='data',inthe='token')
+print(token)
+
+read = read_token(token)
+print(read)
+```
+
 
 
 ## The TokenDealer microservice
 
+Our first step in building the authentication microservice will be to implement everything needed to perform a CCG flow.
+
+构建身份验证微服务的第一步是实现执行CCG流所需的一切。
+
+为此，应用程序接收来自需要令牌的服务的请求，并根据需要生成它们，假设请求中有一个已知的秘密。生成的令牌的生命周期为一天。这种方法具有最大的灵活性，没有生成我们自己的X.509证书的复杂性，同时允许我们有一个服务负责生成令牌。
 
 
-##  
 
-## Securing your code 
+### The OAuth implementation
+
+对于CCG流，需要令牌的服务发送带有URL编码主体的POST请求，该主体包含以下字段:
+
+- client_id:这是标识请求者的唯一字符
+- client_secret:这是一个验证请求者身份的秘密密钥。它应该是预先生成并向认证服务注册的随机字符串。
+- grant_type:授权类型，这里必须是client_credentials。
+
+令牌本身是一个包含几个字段的数据结构:令牌的发行者(iss)，通常是服务的URL;令牌的预期受众(aud)，即
+是，代币是给谁用的;代币发行的时间(iat);以及它的到期(exp)时间。然后使用jwt对数据进行签名。Encode方法，并将其返回给请求客户端:
+
+```python
+@app.route('/oauth/token',methods=["POST"])
+async def create_token():
+  with open(current_app.config['PRIVATE_KEY_PATH']) as f:
+    key = f.read().strip()
+  try:
+    data = await request.form 
+    if data.get('grant_type')!= 'client_credentials':
+      return bad_request(f"Wrong grant_type {data.get('grant_type')}")
+    client_id = data.get('client_id')
+    client_secret = data.get('client_secret')
+    aud = data.get('audience','')
+    if not is_authorized_app(client_app,client_secret):
+      return abort(401)
+   	now = int(time.time())
+    token = {
+      'iss':current_app.config['TOKENDEALER_URL'],
+      'aud':aud,
+      'iat':now,
+      'exp':now+3600*24,
+    }
+    token = jwt.encode(token,key,algorithm='RSS512')
+    return {'access_token':token}
+  except Exception as e:
+    print(e)
+    return bad_request('Unable to create a token')
+```
+
+
+
+接下来要添加的视图是一个函数，该函数返回令牌生成所使用的公钥，这样任何客户端都可以验证令牌，而无需进一步发出HTTP请求。它通常位于众所周知的url中——该地址字面上包含字符串. famous /，这是IETF鼓励的一种实践，它为客户端提供了一种发现服务元数据的方法。我们用JWKS来回应。
+
+在返回的数据中有密钥类型(kty)，算法(alg)，公钥使用(use) -这里是签名-以及RSA算法使用的两个值，我们的加密密钥是用这些值生成的:
+
+```python
+@app.route("/.well-known/jwks.json")
+async def _jwks():
+  '''Returns the public key in the JSON Web key Set(JWKS) format'''
+  with open(current_app.config['PUBLIC_KEY_PATH']) as f:
+    key = f.read().strip()
+    
+  data = {
+        "alg": "RS512",
+        "e": "AQAB",
+        "n": key,
+        "kty": "RSA",
+        "use": "sig",
+    }
+  return jsonify({'keys':[data]})
+
+```
+
+最后一个视图允许客户端验证一个令牌，而不需要自己做这些工作。与令牌生成相比，我们简单地从输入数据中提取正确的字段，并调用jwt.decode函数来提供值。注意，这个函数验证令牌是否有效，但不验证令牌是否允许任何特定的访问——这部分取决于提供令牌的服务:
+
+```python
+@app.route('/verify_token',methods=['POST'])
+async def verify_token():
+  with open(current_app.config['PUBLIC_KEY_PATH']) as f:
+    key = f.read()
+  try:
+    input_data = await request.form 
+    token = input_data['access_token']
+    audience = input data.get('audience','')
+    return jwt.decode(token,key,algorithms=['RSS512'],audience=audience)
+  except Exception as e:
+    return bad_request('I')
+    
+```
+
+
+
+
+
+
+
+### Using TokenDealer
+
+
+
+ 
+
+##  Securing your code 
 
 
 
