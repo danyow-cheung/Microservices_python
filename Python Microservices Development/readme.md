@@ -2464,7 +2464,7 @@ async def verify_token():
     audience = input data.get('audience','')
     return jwt.decode(token,key,algorithms=['RSS512'],audience=audience)
   except Exception as e:
-    return bad_request('I')
+    return bad_request('Unable to verify the token')
     
 ```
 
@@ -2474,13 +2474,88 @@ async def verify_token():
 
 
 
+
+
 ### Using TokenDealer
 
+In jeeves,the Data service is a good example of a place where authentication is required,Adding information via the Data service needs to be restricted to authorized services 
+
+在Jeeves中，数据服务是需要身份验证的一个很好的例子。通过数据服务添加信息需要限制为授权服务:
+
+<img src ='../pic/token_dealer.png'>
+
+在完整的实现中，第一步可以部分自动化。生成一个
+客户端保密通常是通过身份验证服务中的web管理面板完成的。然后将该秘密提供给客户端微服务开发人员。每个需要令牌的微服务现在都可以获得一个令牌，无论是第一次连接，还是因为它已经获得的令牌已经过期。他们
+使用它需要做的是在调用数据服务时将该令牌添加到授权标头。
 
 
+
+ ```python
+ _TOKEN = None
+ from c7_fetch_token import get_token
+ import requests
+ def get_auth_header(new=False):
+     global _TOKEN
+     if _TOKEN is None or new:
+         _TOKEN = get_token()
+     return "Bearer"+_TOKEN
  
+ _dataservice = 'https://localhost:5001'
+ def _call_service(endpoint,token):
+     # not using sessioin and other tools,to simplify the code 
+     url = _dataservice +'/'+endpoint
+     headers = {'Authorization':token}
+     return requests.get(url,headers=headers)
+ 
+ def call_data_service(endpoint):
+     token = get_auth_header()
+     response = _call_service(endpoint,token)
+     if response.status_code==401:
+         # the token might be revoked,let's try with a fresh one 
+         token = get_auth_header(new=True)
+         response = _call_service(endpoint,token)
+     return response
+ 
+ 
+ 
+ ```
+
+如果对数据服务的调用导致401响应，call_data_service()函数将尝试获得一个新的令牌。这种401上的刷新令牌模式可用于所有微服务，以自动生成令牌。
+这包括服务到服务的身份验证。您可以找到完整的实现
+在示例GitHub存储库中使用这个基于jwt的身份验证方案，并将其作为构建身份验证过程的基础。
+下一节将介绍保护web服务的另一个重要方面，即保护代码本身。
 
 ##  Securing your code 
+
+Anything that is published to the web can be attacked, although we have the advantage that most microservices are not exposed to the public internet, which reduces the possible ways they could be exploited. The expected inputs and outputs of the system are narrower, and often better defined using specification tools, such as OpenAPI.
+
+Attacks are not always due to hostile intent, either. If the caller has a bug or is just not calling your service correctly, the expected behavior should be to send back a 4xx response and explain to the client why the request was rejected.
+
+发布到网络上的任何东西都可能被攻击，尽管我们有一个优势，即大多数微服务都没有暴露在公共互联网上，这减少了它们被利用的可能方式。系统的预期输入和输出范围更窄，通常使用规范工具(如OpenAPI)进行更好的定义。
+攻击也不总是出于敌意。如果调用者有一个错误或者没有正确地调用您的服务，预期的行为应该是发送回一个4xx响应，并向客户端解释为什么请求被拒绝。
+
+
+
+Things such as Local File Inclusion (LFI), Remote File Inclusion (RFI), or Remote Code Execution (RCE) are all attacks that trick the server into executing something via client input, or revealing server files. They can happen of course in applications written in most languages and toolkits, but we will examine some of Python's tools to protect against these attacks.
+The idea behind secure code is simple, yet hard to do well in practice. The two fundamental principles are:
+• Every request from the outside world should be carefully assessed before it does something in your application and data.
+• Everything your application is doing on a system should have a well-defined and limited scope.
+诸如本地文件包含(LFI)、远程文件包含(RFI)或远程代码执行(RCE)等都是通过客户端输入诱骗服务器执行某些内容或泄露服务器文件的攻击。当然，在用大多数语言和工具包编写的应用程序中，它们都可能发生，但我们将研究一些Python工具来防止这些攻击。
+安全代码背后的思想很简单，但在实践中很难做好。这两个基本原则是:
+- 来自外部世界的每个请求都应该在它对你的应用程序和数据起作用之前仔细评估。
+- 应用程序在系统上所做的一切都应该有一个定义良好且有限的作用域。
+
+### Limiting your application scope 
+
+### Untrusted incoimg data 
+
+### Redirecting and trusting queries 
+
+### Sanitizing input data 
+
+### Using bandit linter 
+
+### Dependencies
 
 
 
