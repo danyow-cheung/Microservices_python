@@ -2545,19 +2545,478 @@ The idea behind secure code is simple, yet hard to do well in practice. The two 
 - 来自外部世界的每个请求都应该在它对你的应用程序和数据起作用之前仔细评估。
 - 应用程序在系统上所做的一切都应该有一个定义良好且有限的作用域。
 
-### Limiting your application scope 
-
-### Untrusted incoimg data 
-
-### Redirecting and trusting queries 
-
-### Sanitizing input data 
-
-### Using bandit linter 
-
-### Dependencies
+### Limiting your application scope 限制应用范围
 
 
 
-## Web application firewall
+Even if you trust the authentication system, you should make sure that whoever connects has the minimum level of access required to perform their work. 
+
+即使多信任认证系统，也要保证用户的权限是较低的。
+
+
+
+
+
+That scope limitation can be done with JWTs by defining roles (such as read/write) and adding that information in the token under a permissions or scope key, for example. The target microservice will then be able to reject a call on a POST that is made with a token that is supposed to only read data.
+
+jwt可以通过定义角色(例如读/写)并在权限或范围键下的令牌中添加该信息来实现范围限制。然后，目标微服务将能够拒绝对POST的调用，该调用使用的令牌应该只用于读取数据。
+
+
+
+There are two rules you should follow:
+
+1. All software should run with the smallest set of permissions possible 
+2. Be very cautious when executing processes from your web service,and avoid it if you can 
+
+
+
+
+
+### Untrusted incoimg data 不要信任输入数据 
+
+大多数应用程序接受数据作为输入:查询谁的帐户;去哪个城市买天气预报;把钱转到哪个账户，等等。问题是来自我们系统之外的数据不容易被信任。
+前面，我们讨论了SQL注入攻击;现在让我们考虑一个非常简单的例子，我们使用SQL查询来查找一个用户。我们有一个函数，它将查询作为一个要格式化的字符串，并使用标准Python语法填充它:
+
+```python
+import pymysql 
+
+conn = pymysql.connect(host='localhost',db='book')
+
+def get_user(user_id):
+  query = f'select * from user where id={user_id}'
+  with conn.cursor() as cursor:
+    cursor.execute(query)
+    result = cursor.fetchone()
+    return result 
+  
+```
+
+以上的代码写法会引起SQL注入的问题
+
+get_user will perform the expected query, and a second query that will add a
+ new user! It could also delete a table, or perform any other action available to SQL statements. Some damage limitation is there if the authenticated client has limited permissions, but a large amount of data could still be exposed. This scenario can be prevented by quoting any value used to build raw SQL queries. In PyMySQL, you just need to pass the values as parameters to the execute argument to avoid this problem:Get_user将执行预期的查询，第二个查询将添加一个
+新用户!它还可以删除表，或执行SQL语句可用的任何其他操作。如果经过身份验证的客户端权限有限，则会有一些损害限制，但仍可能暴露大量数据。可以通过引用用于构建原始SQL查询的任何值来防止这种情况。在PyMySQL中，你只需要将值作为参数传递给execute参数来避免这个问题:
+
+```python
+def get_user(user_id):
+  query = f'select * from user where id = %s'
+  with conn.cursor() as cursor:
+    cursor.execute(query,(user_id,))
+    result = cursor.fetchone()
+    return result 
+```
+
+**Server-Side Template Injection** (**SSTI**) is a possible attack in which your templates blindly execute Python statements. In 2016, such an injection vulnerability was found on Uber's website on a Jinja2 template, because raw formatting was done before the template was executed. See more at https://hackerone.com/reports/125980.
+
+服务器端模板注入(SSTI)是一种可能的攻击，在这种攻击中，模板盲目地执行Python语句。2016年，在优步网站上的一个Jinja2模板上发现了这样一个注入漏洞，因为在模板执行之前已经完成了原始格式化。详见https://hackerone.com/reports/125980。
+
+代码如下所示
+
+```python
+from quart import Quart,request,render_template_string 
+
+app = Quart(__name__)
+
+SECRET = 'oh no !'
+_TEMPLATE = """Hellp %s Welcome to my API"""
+
+class Extra:
+  def __init__(self,data):
+    self.data =data 
+@app.route("/")
+async def my_microservice():
+  user_id = request.args.get('user_id','Anonymous')
+  tmpl = _TEMPLATE % user_id 
+  return await render_template_string(tmpl,extra=Extra('something'))
+
+app.run()
+```
+
+
+
+
+
+
+
+### Redirecting and trusting queries 重定向和信任查询
+
+The same precaution applies when dealing with redirects. One common mistake is to create a login view that makes the assumption that the caller will be redirected to an internal page and use a plain URL for that redirect:
+
+```python
+@app.route('/login')
+def login():
+  from_url = request.args.get('from_url','/')
+  # do something authentication
+  return redirect(from_url)
+```
+
+
+
+This can be done with the after_request() hook that will be called after our views have generated a response, but before Quart has sent it back to the client. If the application tries to send back a 302, you can check that its location is safe, given a list of domains and ports:
+
+
+
+这可以通过after_request()钩子来实现，该钩子将在视图生成响应之后，但在Quart将响应发送回客户端之前被调用。如果应用程序试图发送回一个302，你可以检查它的位置是否安全，给出一个域和端口列表:
+
+```python
+from quart import Quart,redirect 
+from quart.helpers import make_response 
+from urllib.parse import urlparse
+
+app = Quart(__name__)
+@app.route('/api')
+async def my_microservice():
+    return redirect('https://github.com:443/')
+
+# domain:port 
+SAFE_DOMAINS = ['github.com:443','google.com:443']
+
+@app.after_request
+async def check_redirect(response):
+    if response.status_code != 302:
+        return response
+    url = urlparse(response.location)
+    netloc = url.netloc
+
+    if netloc not in SAFE_DOMAINS:
+        # not using abort() here or it'll break the hook 
+        return await make_response('Forbidden',403)
+    return response
+
+if __name__=="__main__":
+    app.run(debug=True)
+    
+```
+
+
+
+
+
+### Sanitizing input data 消毒（過濾）输入数据
+
+> 什么翻译，wtf
+
+除了处理不可信数据的其他实践之外，我们可以确保
+字段本身符合我们的期望。面对上面的例子，它
+很容易想到我们应该过滤掉任何分号，或者可能是所有的花括号，但这让我们不得不考虑数据可能畸形的所有方式，并试图智取恶意程序员和随机错误的创造力。
+
+
+
+<u>To summarize, you should always treat incoming data as a potential threat</u>, as a source of attacks to be injected into your system. Escape or remove any special characters, avoid using the data directly in database queries or templates without a layer of isolation between them, and ensure your data looks as you would expect it to.
+
+There is also a way to continuously check your code for potential security issues using the Bandit linter, explored in the next section.
+
+总而言之，您应该始终将传入的数据视为潜在威胁，将其视为注入系统的攻击源。转义或删除任何特殊字符，避免在没有隔离层的情况下直接在数据库查询或模板中使用数据，并确保数据看起来像您期望的那样。
+还有一种使用Bandit linter连续检查代码的潜在安全问题的方法，这将在下一节中讨论。
+
+
+
+### Using bandit linter 用强盗的羊绒
+
+[Bandit](https://github.com/ PyCQA/bandit) is another tool to scan your source code for potential security risks.
+
+t can be run in CI systems for the automatic testing of any changes before they
+ get deployed.
+
+
+
+### Dependencies依赖关系
+
+[Dependabot](https://dependabot.com/) is a tool that will perform security sweeps of your project's dependencies. Dependabot is a built-in component of GitHub, and its reports should be visible in your project's **Security** tab. Turning on some extra features in the project's **Settings** page allows Dependabot to automatically create pull requests with any changes that need making to remain secure.
+
+PyUp has a similar set of features but requires manually setting up—as does Dependabot if you're not using GitHub.
+
+
+
+[Dependabot](https://dependabot.com/)是一个对项目依赖项执行安全扫描的工具。Dependabot是GitHub的内置组件，它的报告应该在项目的**Security**选项卡中可见。在项目的**Settings**页面中打开一些额外的功能，允许Dependabot自动创建拉请求，并对需要保持安全的任何更改进行更改。
+
+PyUp有一组类似的功能，但需要手动设置——如果你不使用GitHub, Dependabot也需要手动设置。
+
+
+
+## Web application firewall 网路应用程序的防火墙
+
+> Even with the safest handling of data, our application can still be vulnerable to attack. When you're exposing HTTP endpoints to the world, this is always a risk. You will be hoping for callers to behave as intended, with each HTTP conversation following a scenario that you have programmed in the service.
+>
+> 即使对数据进行了最安全的处理，我们的应用程序仍然容易受到攻击。当您向外界公开HTTP端点时，这总是有风险的。您希望调用方的行为符合预期，每个HTTP会话都遵循您在服务中编程的场景。
+
+
+
+A client can send legitimate requests and just hammer your service with it, leading to a **Denial of Service** (**DoS**) due to all the resources then being used to handle requests from the attacker. When many hundreds or thousands of clients are used to do this, it's known as a **Distributed Denial of Service** (**DDoS**) attack. This problem sometimes occurs within distributed systems when clients have replay features that are automatically recalling the same API. If nothing is done on the client side to throttle calls, you might end up with a service overloaded by legitimate clients.
+
+客户端可以发送合法的请求，<u>然后用它来敲打您的服务，导致拒绝服务(DoS)</u>，因为所有的资源都被用于处理来自攻击者的请求。当数百或数千个客户端被用来这样做时，它被称为<u>分布式拒绝服务(DDoS)攻击</u>。在分布式系统中，当客户端具有自动调用相同API的重放特性时，有时会出现此问题。如果客户端没有采取任何措施限制调用，那么您可能最终会得到一个由合法客户端超载的服务。
+
+
+
+
+
+### OpenResty:Lua and nginx 
+
+[OpenRest](http://openresty.org/en/) is an nginx distribution that embeds a [Lua](http://www.lua.org/) interpreter that can be used to script the web server. We can then use scripts to apply rules and filters to the traffic.
+
+Lua is an excellent, dynamically typed programming language that has a lightweight and fast interpreter. The language offers a complete set of features and has built-in async features. You can write coroutines directly in vanilla Lua.
+
+If you install Lua (refer to http://www.lua.org/start.html), you can play with the language using the Lua **Read-Eval-Print Loop** (**REPL**), exactly as you would with Python:
+
+[OpenRest](http://openresty.org/en/)是一个nginx发行版，它嵌入了一个[Lua](http://www.lua.org/)解释器，可以用来为web服务器编写脚本。然后，我们可以使用脚本对流量应用规则和过滤器。
+
+Lua是一种优秀的动态类型编程语言，它有一个轻量级的快速解释器。该语言提供了一组完整的特性，并具有内置的异步特性。你可以直接用vanilla Lua编写协程。
+
+如果你安装了Lua(参考http://www.lua.org/start.html)，你可以使用Lua **Read-Eval-Print Loop** (**REPL**)来玩这门语言，就像你使用Python一样:
+
+On macOS, you can use Brew and the `brew install openresty` command.
+
+Once OpenResty is installed, you will get an openresty command, which can be used exactly like nginx to serve your applications. In the following example, the nginx configuration will proxy requests to a Quart application running on port 5000:
+
+一旦安装了OpenResty，你将得到一个OpenResty命令，它可以像nginx一样使用来为你的应用程序服务。在下面的例子中，nginx配置将把请求代理给一个运行在端口5000上的Quart应用程序:
+
+```
+# resty.conf
+daemon off;
+worker_processes  1;
+error_log /dev/stdout info;
+events {
+worker_connections  1024;
+}
+http {
+  access_log /dev/stdout;
+  server {
+    listen   8888;
+    server_name  localhost;
+    location / {
+      proxy_pass http://localhost:5000;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+} }
+}
+
+```
+
+
+
+
+
+Lua can be invoked at different moments when a request comes in; the two that are most attractive to this chapter are:
+
+- access_by_lua_block: This is called on every incoming request before a response is built, and is where we can build access rules in our WAF
+- content_by_lua_block: This uses Lua to generate a response
+
+
+
+当请求进入时，Lua可以在不同的时刻调用;本章最吸引人的两点是:
+
+- access_by_lua_block:在构建响应之前，对每个传入的请求都调用这个函数，并且我们可以在WAF中构建访问规则
+- content_by_lua_block:使用Lua生成响应
+
+
+
+### Rate and concurrency limiting 
+
+
+
+**Rate limiting** consists of counting how many requests a server accepts within a given period of time, and rejecting new ones when a limit is reached.
+
+**速率限制**包括计算服务器在给定时间内接受多少请求，并在达到限制时拒绝新的请求。
+
+
+
+**Concurrency limiting** consists of counting how many concurrent requests are being served by the web server to the same remote user, and rejecting new ones when it reaches a defined threshold. Since many requests can reach the server simultaneously, a concurrency limiter needs to have a small allowance in its threshold.
+
+
+
+**并发限制**包括计算web服务器向同一远程用户提供的并发请求的数量，并在达到定义的阈值时拒绝新的请求。由于许多请求可以同时到达服务器，因此并发限制器的阈值需要有一个小的允许值。
+
+
+
+
+
+In the following example, we're adding a lua_shared_dict definition and a section called access_by_lua_block to activate the rate limiting. Note that this example is a simplified version of the example in the project's documentation:
+
+在下面的示例中，我们添加了一个lua_shared_dict定义和一个名为access_by_lua_block的节来激活速率限制。注意，这个例子是项目文档中例子的简化版本:
+
+> copy and pasta 
+
+```lua
+# resty_limiting.conf
+daemon off;
+worker_processes  1;
+error_log /dev/stdout info;
+events {
+    worker_connections  1024;
+}
+http {
+    lua_shared_dict my_limit_req_store 100m;
+server {
+  listen   8888;
+  server_name  localhost;
+  access_log /dev/stdout;
+  location / {
+              access_by_lua_block {
+                  local limit_req = require "resty.limit.req"
+                  local lim, err = limit_req.new("my_limit_req_store",200,100)
+                  local key = ngx.var.binary_remote_addr
+                  local delay, err = lim:incoming(key, true)
+                  if not delay then
+                      if err == "rejected" then
+                          return ngx.exit(503)
+                      end
+                      ngx.log(ngx.ERR, "failed to limit req: ", err)
+                      return ngx.exit(500)
+                  end
+                  if delay >= 0.001 then
+                      local excess = err
+                      ngx.sleep(delay)
+                  end
+  }
+  proxy_pass http://localhost:5000;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  } }
+  }
+
+```
+
+
+
+
+
+### Other OpenResty features 
+
+For instance, if you are using a Redis or a Memcached server to cache some of your GET resources, you can directly call them from Lua to add or fetch a cached version for a given endpoint. The srcache-nginx-module (https://github.com/openresty/ srcache-nginx-module) is an implementation of such behavior, and will reduce the number of GET calls made to your Quart apps if you can cache them.
+
+To conclude this section about WAFs: OpenResty is a powerful nginx distribution that can be used to create a simple WAF to protect your microservices. It also offers abilities that go beyond firewalling. In fact, if you adopt OpenResty to run your microservices, it opens a whole new world of possibilities, thanks to Lua.
+
+
+
+
+
+
+
+# Chapter 8: Making a Dashboard 
+
+Modern web applications greatly rely on client-side JavaScript (JS, also known
+ as ECMAScript). Some JS frameworks go all the way in terms of providing a full **Model-View-Controller** (**MVC**) system, which runs in the browser and manipulates the **Document Object Model** (**DOM**), the structured representation of the web page that is rendered in a browser.
+
+
+
+现代web应用程序在很大程度上依赖于客户端JavaScript 一些JS框架在提供完整的模型-视图-控制器(MVC)系统方面走了一路，该系统在浏览器中运行，并操作文档对象模型(DOM)，即在浏览器中呈现的web页面的结构化表示。
+
+
+
+
+
+Tools like Facebook's [ReactJS](https://facebook.github.io/react/) provide high- level APIs to avoid manipulating the DOM directly and offer a level of abstraction which makes client-side web development as comfortable as building Quart applications.
+
+ReactJS 避免直接操作DOM，并提供一个抽象级别，使客户端web开发像构建Quart应用程序一样舒适。
+
+
+
+This chapter is composed of the following three parts:
+
+- Building a ReactJS dashboard—a short introduction to ReactJS with an example
+
+- How to embed ReactJS in a Quart app and structure the application
+
+- Authentication and authorization
+
+  
+
+
+
+
+
+## Building a ReactJS dashboard 
+
+In a similar way to a web server such as nginx, taking care of all the difficult and common parts of the network traffic and leaving you to deal with the logic in your endpoints, ReactJS lets you concentrate on the implementation in your methods instead of worrying about the state of the DOM and the browser. Implementing classes for React can be done in pure JavaScript, or using an extension called JSX. We will discuss JSX in the next section.
+
+类似于web服务器(如nginx)，处理网络流量中所有困难和常见的部分，让你处理端点中的逻辑，ReactJS让你专注于方法中的实现，而不是担心DOM和浏览器的状态。React的类可以用纯JavaScript实现。
+
+
+
+### The JSX syntax 
+
+Instead, there is a better, hybrid model using a transpiler – a type of compiler that generates a different form of source code instead of a runnable program. The JSX syntax extension (https://facebook.github.io/jsx/) adds XML tags to JavaScript and can be transpiled into pure JavaScript, either in the browser or beforehand. JSX is promoted by the ReactJS community as the best way to write React apps.
+
+
+
+相反，有一种更好的混合模型，使用编译器——一种生成不同形式的源代码而不是可运行程序的编译器。JSX语法扩展(https://facebook.github.io/jsx/)将XML标记添加到JavaScript中，可以在浏览器中或事先将其转换为纯JavaScript。JSX被ReactJS社区推广为编写React应用程序的最佳方式。
+
+
+
+### React components 
+
+ReactJS is based on the idea that a web page can be constructed from basic components, which are invoked to render different parts of the display and respond to events such as typing, clicks, and new data appearing.
+
+ReactJS基于这样一种思想，即web页面可以由基本组件构建，这些组件被调用来呈现显示的不同部分，并对键入、单击和新数据出现等事件做出响应。
+
+
+
+
+
+
+
+### Pre-processing JSX 
+
+So far, we have relied on the web browser to convert the JSX files for us. We could still do that, however, it will be the same work being done by each web browser that visits our site. Instead, we can process our own JSX files and provide pure JavaScript to people visiting our site. To do that we must install some tools.
+
+Firstly, we need a JavaScript package manager. The most important one to use is npm (https://www.npmjs.com/). The npm package manager is installed via Node.js. On macOS, the brew install node command does the trick, or you can go to the **Node.js** home page (https://nodejs.org/en/) and download it to the system. Once Node.js and npm are installed, you should be able to call the npm command from the shell as follows:
+
+到目前为止，我们一直依赖web浏览器为我们转换JSX文件。我们仍然可以这样做，但是，这将是由访问我们网站的每个web浏览器所做的相同工作。相反，我们可以处理自己的JSX文件，并为访问我们站点的人提供纯JavaScript。要做到这一点，我们必须安装一些工具。
+首先，我们需要一个JavaScript包管理器。最重要的是npm (https://www.npmjs.com/)。npm包管理器是通过Node.js安装的。在macOS上，可以使用brew install node命令，也可以访问node .js主页(https://nodejs.org/en/)并将其下载到系统中。一旦Node.js和npm被安装，你应该能够从shell调用npm命令，如下所示:
+
+
+
+
+
+## ReactJS and Quart 
+
+From the perspective of the server, the JavaScript code is a static file, and so serving React apps with Quart is no trouble at all. The HTML page can be rendered with Jinja2, and the transpiled JSX files can be provided as static content alongside
+ it, much like you would do for plain JavaScript files. We can also get the React distribution and serve those files, or rely on a **Content Delivery Network** (**CDN**) to provide them.
+
+In many cases a CDN is the better option, as retrieving the files will be faster, and the browser then has the option of recognizing that it has already downloaded these files and can use a cached copy to save time and bandwidth. Let's name our Quart application dashboard, and start off with a simple structure like this:
+
+从服务器的角度来看，JavaScript代码是一个静态文件，所以用Quart服务React应用一点问题都没有。HTML页面可以用Jinja2呈现，转译后的JSX文件可以作为静态内容提供
+它，就像您对普通JavaScript文件所做的那样。我们还可以获得React分发版并提供这些文件，或者依靠内容交付网络(CDN)来提供这些文件。
+在许多情况下，CDN是更好的选择，因为检索文件会更快，然后浏览器可以选择识别它已经下载了这些文件，并可以使用缓存副本来节省时间和带宽。让我们命名我们的Quart应用程序仪表板，并从这样一个简单的结构开始:
+
+
+
+基本的quart應用嵌入html像這樣
+
+```python
+from quart import Quart,render_template 
+app = Quart(__name__)
+@app.route("/")
+def index():
+  return render_template('index.html')
+
+if __name__ =='__main__':
+  app.run()
+  
+```
+
+Thanks to Quart's convention on static assets, all the files contained inside the static/ directory are served under the /static URL. The index.html template looks like the one described in the previous section and can grow into something Quart- specific later on. That is all we need to serve a ReactJS-based app through Quart.
+
+Throughout this section, we have worked on the assumption that the JSON data that React picked was served by the same Quart app. Doing AJAX calls on the same domain is not an issue, but in case you need to call a microservice that belongs
+ to another domain, there are a few changes required on both the server and the client side.
+
+由于Quart关于静态资产的约定，静态/目录中包含的所有文件都在/static URL下提供服务。index.html模板类似于前一节中描述的模板，并且可以在以后成长为特定于夸特的模板。这就是我们通过Quart提供一个基于reactjs的应用程序所需要的全部内容。
+在本节中，我们假设React选择的JSON数据是由同一个Quart应用程序提供的。在同一个域上执行AJAX调用不是问题，但如果你需要调用属于该域的微服务
+对于另一个域，服务器端和客户端都需要进行一些更改。
+
+
+
+
+
+### Cross-origin resource sharing
+
+
+
+## Authentication and authorization
+
+
+
+
 
