@@ -3012,9 +3012,175 @@ Throughout this section, we have worked on the assumption that the JSON data tha
 
 ### Cross-origin resource sharing
 
+Allowing client-side JavaScript to perform cross-domain requests is a potential security risk.
+
+允许客户端JavaScript执行跨域请求是一个潜在的安全风险。
 
 
-## Authentication and authorization
+
+
+
+This is why all browsers use the W3C standard for cross-origin resources
+
+這就是為什麼開發者使用W3C標準
+
+除了安全之外，这也是防止某人在他们的web应用程序中使用你的带宽的好方法。例如，如果你在你的网站上提供了一些字体文件，你可能不希望其他网站在他们的页面上使用它们，并在不受任何控制的情况下使用你的带宽。然而，有一些合法的用例想要与其他域共享你的资源，你可以在你的服务上设置规则，允许其他域访问你的资源。
+
+
+
+
+
+The **Quart-CORS** (https://gitlab.com/pgjones/quart-cors/) project allows us to add support for this very simply:
+
+```python
+from quart import Quart 
+from quart_cors import cors 
+
+app = Quart(__name__)
+app = cors(app,allow_origin='https://quart.com')
+
+@app.route('/api')
+async def my_microservice():
+    return {"Hello":"World"}
+
+```
+
+
+
+
+
+## Authentication and authorization认证和授权
+
+
+
+The React dashboard needs to be able to authenticate its users and perform authorized calls on some microservices. It also needs to enable the user to grant access to any third-party sites we support, such as Strava or GitHub.
+
+React仪表板需要能够对其用户进行身份验证，并在一些微服务上执行授权调用。它还需要使用户能够授权访问我们支持的任何第三方网站，如Strava或GitHub。
+
+
+
+
+
+### A note about Micro Frontends 关于Micro frontend的注意事项
+
+This approach introduces some of the same complications that a monolithic backend suffers from. A change to any of the backend or its user interface means updating a microservice and the user interface elements that query it, and those may well be in different source control repositories or managed by different teams. Perhaps support for both the old and new ways has to be introduced for a managed migration, or careful timing with different deployment mechanisms has to happen.
+
+这种方法引入了与单片后端相同的一些并发症。对任何后端或其用户界面的更改都意味着更新一个微服务和查询它的用户界面元素，而这些元素可能在不同的源代码控制存储库中或由不同的团队管理。为了进行托管迁移，可能必须同时引入对旧方法和新方法的支持，或者必须谨慎地选择不同的部署机制。
+
+
+
+
+
+With all that said, the Micro Frontend model is still relatively new, and many best practices and even bits of terminology are still in flux. For that reason, we shall focus on a simpler variant of this approach and have the authentication service provide its own HTML for logging a user in and creating an account that can be included in an iframe within another page if desired.
+
+综上所述，Micro Frontend模型仍然相对较新，许多最佳实践甚至一些术语仍在不断变化。因此，我们将关注这种方法的一种更简单的变体，并让身份验证服务提供自己的HTML，用于用户登录和创建帐户，如果需要，该帐户可以包含在另一个页面的iframe中。
+
+
+
+
+
+
+
+
+
+### Getting the Slack token获取Slack令牌
+
+Slack provides a typical three-legged OAuth2 implementation, using a simple set of HTTP GET requests. Implementing the exchange is done by redirecting the user to Slack and exposing an endpoint the user's browser is redirected to once access has been granted.
+
+Slack提供了一个典型的三足OAuth2实现，使用一组简单的HTTP GET请求。实现交换的方法是将用户重定向到Slack，并公开一个终端，一旦授予访问权限，用户的浏览器就会重定向到这个终端。
+
+
+
+
+
+
+
+### JavaScript authenticationJavaScript验证
+
+When the Dashboard app performs the OAuth2 exchange with Slack, it stores user information in the session, which is a fine approach for the user authenticating on the dashboard. However, when the ReactJS UI calls the DataService microservice to display the user runs, we need to provide an authentication header. The following are two ways to handle this problem:
+
+当Dashboard应用程序与Slack执行OAuth2交换时，它将用户信息存储在会话中，这是用户在仪表板上进行身份验证的好方法。然而，当ReactJS UI调用DataService微服务来显示用户运行时，我们需要提供一个身份验证头。下面有两种方法可以解决这个问题:
+
+- Proxy all the calls to the microservices via the Dashboard web app using the existing session information使用现有的会话信息，通过Dashboard web应用程序代理所有对微服务的调用
+- Generate a JWT token for the end user,which can be stored and used against another microservice为最终用户生成一个JWT令牌，该令牌可以存储并用于另一个微服务
+
+
+
+# Chapter 9: Packing and Running Python 
+
+ In 1998, Distutils was added to the standard library to provide essential support to create installable distributions for Python projects. 
+
+1998年，Distutils被添加到标准库中，为为Python项目创建可安装的发行版提供必要的支持。
+
+
+
+Moreover, developing in such a context can be tedious if you need to reinstall new versions of your microservices all the time. This leads to one question in particular: *how can you correctly install the whole stack in your environment and develop in it?*
+
+此外，如果你需要一直重新安装微服务的新版本，那么在这样的环境下开发会很乏味。这导致了一个特别的问题:如何正确地在您的环境中安装整个堆栈并在其中进行开发?
+
+
+
+## The packaging toolchain
+
+ In other words, a change in the standard library takes months to be released, whereas a change in a third-party project can be made available much faster. All third-party projects that are considered as being part of the de facto standard packaging toolchain are now all grouped under the **PyPA** (https://www.pypa.io) umbrella project.
+
+
+
+换句话说，标准库中的更改需要几个月的时间才能发布，而第三方项目中的更改可以更快地发布。所有被认为是事实上标准打包工具链的一部分的第三方项目现在都在PyPA (https://www.pypa.io)伞形项目下。
+
+
+
+### A few deinitions 
+
+- python package 
+
+  is a directory tree containing Python modules. You can import it, and it is part of the module namespace.
+
+  
+
+- python project 
+
+  can contain several packages, modules, and other resources and is what you release. Each microservice you build with Flask is a Python project.
+
+  
+
+- python application 
+
+  is a Python project that can be directly used through a user interface. The user interface can be a command-line script or a web server.
+
+  
+
+- python library 
+
+   is a specific kind of Python project that provides features to be used in other Python projects and has no direct end-user interface.
+
+  
+
+### Packing 
+
+
+
+### Versioning 
+
+
+
+### Releasing 
+
+
+
+## Running all microservice 
+
+
+
+
+
+## Process management 
+
+
+
+
+
+
 
 
 
