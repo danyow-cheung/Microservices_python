@@ -3158,14 +3158,168 @@ Moreover, developing in such a context can be tedious if you need to reinstall n
 
 ### Packing 
 
+When you package your python project,there are three standard files you need to have alongside your python packages:当你打包你的python项目时，你需要在你的python包旁边有三个标准文件:
+
+- pyproject.toml: A configuration file or for the project's build system用于项目构建系统的配置文件
+
+- setup.py or setup.cfg: A special module that controls packaging and metadata about the project
+
+  控制关于项目的打包和元数据的特殊模块
+
+   
+
+- requirements.txt:  A file listing dependencies 列出依赖项的文件
+
+  
+
+  
+
+#### The setup.py file 
+
+The setup.py file is what governs everything when you want to interact with a Python project. 
+
+当您希望与Python项目交互时，setup.py文件将管理所有内容。
 
 
-### Versioning 
+
+A common mistake when creating the setup.py file is to import your package into it when you have third-party dependencies. If a tool like pip tries to read the metadata by running setup.py, it might raise an import error before it has a chance to list all the dependencies to install. The only dependency you can afford to import directly in your setup.py file is Setuptools, because you can assume that anyone trying to install your project is likely to have it in their environment.
+
+在创建setup.py文件时，一个常见的错误是当您有第三方依赖关系时将您的包导入其中。如果像pip这样的工具试图通过运行setup.py来读取元数据，它可能会在有机会列出要安装的所有依赖项之前引发导入错误。在setup.py文件中可以直接导入的唯一依赖项是Setuptools，因为您可以假设任何试图安装您的项目的人都可能在他们的环境中拥有它。
 
 
 
-### Releasing 
+If you are missing any critical options, then Setuptools will provide information about the ones it needs when you try to use it. The following is an example of a setup.py file that includes these options:
 
+如果您缺少任何关键选项，那么当您尝试使用它时，Setuptools将提供有关所需选项的信息。下面是一个setup.py文件的示例，其中包含这些选项:
+
+```python
+from setuptools import setup,find_packages 
+
+with open('README.rst') as f:
+  LONG_DESC = f.read()
+setup(
+name = 'myProject',
+version = '1.0.0',
+url = 'http://example.com',
+description = 'This is a cool microservice based on Quart',
+long_description=LONG_DESC,
+long_description_content_type='text/x-rst',
+author='danyow',
+author_email = 'danyowchueng@gmail.com',
+license = 'None',
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+],
+  keywords = ['quart','microservice'],
+  packages = find_packages(),
+  include_package_data = True,
+  zip_safe = False ,
+  install_requires = ['quart'],
+)
+```
+
+
+
+#### The requirements.txt file 
+
+Using this file has been widely adopted by the community, because it makes it easier to document your dependencies. You can create as many requirements files as you want in a project, and have your users call the pip install -r requirements.txt command to install the packages described in them
+
+簡單來說，使用python 項目時候，直接`pip install requirements.txt`就可以完成所有python第三方庫的安裝。
+
+
+
+
+
+To summarize, defining dependencies should be done in each project's setup.py file, and requirements files can be provided with pinned dependencies if you have a reproducible process to generate them from the setup.py file to avoid duplication.
+
+总而言之，定义依赖关系应该在每个项目的setup.py文件中完成，如果您有一个可重复的过程来从setup.py文件中生成需求文件以避免重复，则可以为需求文件提供固定的依赖关系。
+
+
+
+
+
+#### The MANIFEST.in file 
+
+When creating a source or binary release, Setuptools will include all the package modules and data files, the setup.py file, and a few other files automatically in the package archive. Files like pip requirements will not be included. To add them to your distribution, you need to add a MANIFEST.in file, which contains the list of files to include.
+
+当创建源代码或二进制版本时，Setuptools将包含所有的包模块和数据文件、setup.py文件以及包归档中自动包含的其他一些文件。像pip要求这样的文件将不包括在内。要将它们添加到您的发行版中，您需要添加一个MANIFEST。文件中，其中包含要包含的文件列表。
+
+
+
+The file follows a simple glob-like syntax, described at the following, where you refer to a file or a directory pattern and say whether you want to include or prune the matches: https://docs.python.org/3/distutils/commandref.html#creating-a- source-distribution-the-sdist-command.
+
+Here's an example from Jeeves:
+
+该文件遵循一个简单的类似glob的语法，如下所述，其中您引用一个文件或目录模式，并表示您是想包含还是删除匹配项:https://docs.python.org/3/distutils/commandref.html#creating-a- source-distribution- The -sdist-命令。
+下面是来自Jeeves的一个例子:
+
+`include requirements.txt`
+
+`include README.rst`
+
+`include LINCENSE`
+
+`recursive-include myservice *.ini`
+
+`recursive-include docs *.rst *.png *.svg *.css *.html conf.py`
+
+`prune docs/build/*`
+
+ A typical microservice project, as described in this book, will have the following list of files:
+
+一个典型的微服务项目，如本书所述，将有以下文件列表:
+
+- setup.py 
+- README.rst 
+- MANIFEST.in :
+- A code of conduct,if the code is an open-source project 
+- requirements.txt :pip requirement files generated from install_requires
+- docs/: The Sphinx documentation
+- A directory containing the microservice code,which will typically be named after the microservice,or src/
+
+
+
+
+
+
+
+### Versioning 版本控制
+
+介紹了0.x.0差別版本
+
+正式出版版本號應該為1.0.0
+
+
+
+### Releasing 發佈版本
+
+To release your project, we must build a package that can be either uploaded to a package repository such as PyPI or installed directly wherever it is needed. Python has a build utility that makes this process straightforward.
+
+为了发布您的项目，我们必须构建一个包，该包可以上传到诸如PyPI这样的包存储库，也可以直接安装在任何需要的地方。Python有一个构建实用程序，可以使这个过程变得简单。
+
+In the following example, we install the build utility, and then run it in the example project we used earlier in this chapter. The output can be quite long, so only some of it is included below:在下面的示例中，我们安装构建实用程序，然后在本章前面使用的示例项目中运行它。输出可能会很长，所以下面只包括部分输出:
+
+```python
+!pip install --upgrade build
+
+python -m build 
+
+```
+
+the build command reads the information from setup.py and MANIFEST.in collects all the files ,and put them in an archive,the result is created in the dist directory
+
+```powershell
+ls dist/
+```
+
+
+请注意，存档的名称由项目名称及其版本组成。归档文件采用Wheel格式，在PEP 427中定义，这是目前分发Python包的最佳格式，尽管过去有不同的方法，您可能会在现有项目中遇到。这个存档可以直接使用pip来安装项目，如下所示:
+```powershell
+pip install dist/xxxx.whl
+
+```
 
 
 ## Running all microservice 
