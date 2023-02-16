@@ -3324,7 +3324,7 @@ pip install dist/xxxx.whl
 
 ## Running all microservice 
 
-
+pass
 
 
 
@@ -3334,9 +3334,249 @@ pip install dist/xxxx.whl
 
 
 
+# Chapter 10: Deploying on AWS 
+
+> 最重要的章节
+
+**Virtual Machines** (**VMs**) can be a good solution, as they provide an isolated environment in which to run your code
 
 
 
+
+
+The big revolution came with **Docker**, an open-source virtualization tool first released in 2013. Docker allows the use of isolated environments called *containers* to run applications in a very portable way.
+
+最大的变革来自于2013年首次发布的开源虚拟化工具Docker。Docker允许使用被称为容器的隔离环境以一种非常可移植的方式运行应用程序。
+
+
+
+
+
+## What is Docker
+
+The Docker project is a container platform,which lets you run your applications in isolated environments.Using the Linux feature called cgroups,
+
+Docker项目是一个容器平台，它允许您在隔离的环境中运行应用程序。使用名为cgroups的Linux特性，
+
+Docker creates isolated environments called containers that run on Linux without a VM. On macOS and Windows, installing Docker will create a lightweight VM for you to run containers in, although this is a seamless process. This means that macOS, Windows, and Linux users can all develop container-based applications without worrying about any interoperability trouble and deploy them to a Linux server where they will run natively.
+
+Docker创建隔离的环境，称为容器，在Linux上运行，不需要虚拟机。在macOS和Windows上，安装Docker将为你创建一个轻量级的虚拟机来运行容器，尽管这是一个无缝的过程。这意味着macOS、Windows和Linux用户都可以开发基于容器的应用程序，而不用担心任何互操作性问题，并将它们部署到Linux服务器上，在那里它们将本机运行。
+
+
+
+
+
+检查有无安装docker的终端命令为
+
+`docker version`
+
+
+
+## Introduction to Docker
+
+Let's experiment with Docker containers. Running a container that you can enter commands in is as simple as the following:
+
+`docker run -- ineractive --tty ubuntu:20.04 bash`
+
+With this command, we are telling Docker to run the Ubuntu image, which will be fetched from Docker Hub, a central registry of public images. We are providing a tag of 20.04 after the image name so that we download the container image that represents the Ubuntu 20.04 operating system. This won't contain everything that a regular Ubuntu installation has, but anything that's missing is installable.
+
+通过这个命令，我们告诉Docker运行Ubuntu映像，该映像将从Docker Hub(一个公共映像的中央注册中心)获取。我们在映像名称后面提供了一个20.04标记，以便下载代表Ubuntu 20.04操作系统的容器映像。它不会包含常规Ubuntu安装的所有内容，但任何缺少的内容都是可以安装的。
+
+The standard name for these Docker configuration files is a Dockerfile, and the following is a basic example of one:
+
+<u>这些Docker配置文件的标准名称是Dockerfile</u>，下面是一个基本的例子:
+
+`FROM ubuntu:20.04`
+
+`RUN apt-get update && apt-get install -y python3`
+
+`CMD['bash']`
+
+A Dockerfile is a text file with a set of instructions. Each line starts with the instruction in uppercase, followed by its arguments. In our example, there are these three instructions:
+
+Dockerfile是一个带有一组指令的文本文件。每行以大写的指令开始，后面跟着它的参数。在我们的例子中，有三个指令:
+
+
+
+- FROM: Points to the base image to use指针应用哪一个操作系统
+
+- RUN: Runs the commands in the container once the base image is installed
+
+  一旦安装了基本映像，就在容器中运行命令
+
+  
+
+- CMD: The command to run when the container is executed by Docker
+
+  Docker在容器执行时执行的命令
+
+to use python3.9 from the alpine base image, you can create a Dockerfile like this:
+
+`FROM python3.0-alpine CMD['python3.9']`
+
+
+
+## Running Quart in Docker
+
+In the following example, we introduce the COPY command, which will recursively copy files and directories from outside the container into the image. We also add the EXPOSE directive to indicate to anyone running the container that this port should be exposed to the outside world. We still need to connect that exposed port when we run the container with the -p option. Any process inside the container can listen to any ports that it wants to, and communicate with itself using localhost, but anything outside the container won't be able to reach the inside unless that port has been exposed. It's also worth noting that localhost inside the container only refers to the container, not the computer that's hosting the running containers; so, if you need to communicate with other services, you will need to use its real IP address:
+
+在下面的示例中，我们将引入COPY命令，该命令将递归地将容器外部的文件和目录复制到映像中。我们还添加了EXPOSE指令，向运行容器的任何人指示，应该将这个端口暴露给外部世界。在使用-p选项运行容器时，我们仍然需要连接那个暴露的端口。容器内的任何进程都可以侦听它想侦听的任何端口，并使用localhost与自己通信，但容器外的任何进程都无法到达容器内部，除非该端口已公开。同样值得注意的是，容器内部的localhost只指向容器本身，而不是承载运行容器的计算机;所以，如果你需要与其他服务通信，你需要使用它的真实IP地址:
+
+```
+FROM python:3.9
+COPY . /app/
+RUN pip install -r /app/requirements.txt
+RUN pip install /app/
+CMD ["hypercorn", "—bind", "0.0.0.0:5000", "myservice:app"]
+```
+
+
+
+
+
+
+
+
+
+## Docker-based deployments 
+
+这一步还是没有aws，visa的信用卡
+
+无法实现
+
+
+
+### Terraform
+
+Before we head further into the different container orchestration tools, it's worth mentioning a different sort of tool that can organize the underlying cloud instances. **Terraform**, made by the company HashiCorp, is a widely adopted tool for defining resources as code. 
+
+在进一步讨论不同的容器编排工具之前，有必要介绍一种不同类型的工具，它可以组织底层云实例。由HashiCorp公司开发的Terraform是一种被广泛采用的将资源定义为代码的工具。
+
+
+
+### Service discovery
+
+We very quickly come across scenarios that complicate a static configuration. If we need to move a microservice to a new AWS region, or a different cloud provider entirely, then how do we tell all the other microservices that use it? If we add a new feature that's controlled by a feature flag, how do we quickly turn it on and off? On a smaller scale, how does a load balancer know about all the containers that should receive traffic?
+
+我们很快就会遇到使静态配置复杂化的场景。如果我们需要将一个微服务移动到一个新的AWS区域，或者完全不同的云提供商，那么我们如何告知所有使用它的其他微服务?如果我们添加一个由特性标志控制的新特性，我们如何快速地打开和关闭它?在较小的范围内，负载均衡器如何知道应该接收流量的所有容器?
+
+
+
+
+
+We will use etcd as an example, with a basic Quart service, while also utilizing the etcd3 Python library. Assuming you have etcd running with the default options after following the instructions on their website, we can add some configuration- updating code to our service, and have an endpoint that returns the URL we would contact, if the application was more complete:
+
+我们将以etcd为例，使用一个基本的Quart服务，同时还使用etcd3 Python库。假设你按照etcd网站上的说明运行了默认选项，我们可以在我们的服务中添加一些配置更新代码，并有一个端点返回我们将联系的URL，如果应用程序更完整的话:
+
+```python
+from quart import Quart,current_app 
+import etcd3 
+
+# can read this map from a tranditional config file
+setting_map ={
+    'dataset_url':'/services/dataservice/url'
+}
+
+setting_reverse_map = {v:k for k,v in setting_map.items()}
+
+etcd_client = etcd3.client()
+def load_settings():
+    config = dict()
+    for setting,etcd_key in setting_map.items():
+        config[setting] = etcd_client.get(etcd_key)[0].decode('utf-8')
+    return config
+
+def create_app(name=__name__):
+    app = Quart(__name__)
+    app.config.update(load_settings())
+    return app 
+
+def watch_callback(event):
+    global app 
+    for update in event.events:
+        # determine which settings to update,and convert from bytes to str 
+        config_option = setting_reverse_map[update.key.decode('utf-8')]
+        app.config[config_option] = update.value.decode('utf-8')
+
+# start to watch for dataservice url changes 
+# you can also watch entire areas with add_watch_prefix_callback
+watch_id = etcd_client.add_watch_callback('/services/dataservice/url')
+watch_callback()
+
+@app.route('/api')
+def what_is_url():
+    return {"url":app.config['dataservice_url']}
+app.run()
+
+```
+
+
+
+### Docker Compose Docker组成
+
+ Docker Compose (https://docs.docker.com/compose/) simplifies the task by letting you define multiple containers' configuration in a single configuration file, as well as how those containers depend on each other. 
+
+Docker Compose (https://docs.docker.com/compose/)允许你在一个配置文件中定义多个容器的配置，以及这些容器如何相互依赖，从而简化了这一任务。
+
+Once the script is installed on your system, create a yaml file containing the information about services and networks that you want to run. The default filename is docker-compose.yml, and so we will use that name for our examples to make the commands simpler.
+
+在系统上安装脚本之后，创建一个yaml文件，其中包含关于您想要运行的服务和网络的信息。默认文件名是docker-compose。Yml，因此我们将在示例中使用这个名称，以使命令更简单。
+
+
+
+### Docker Swarm Docker群
+
+Docker has a built-in cluster functionality called **swarm** mode (https://docs. docker.com/engine/swarm/). This mode has an impressive list of features, which lets you manage all your container clusters from a single utility. This makes it ideal for smaller deployments or ones that do not need to scale up and down as flexibly to meet changing demands.
+
+Docker有一个内置的集群功能，叫做**swarm**模式(https://docs。docker.com/engine/swarm/)。此模式具有令人印象深刻的特性列表，允许您从一个实用程序管理所有容器集群。这使得它非常适合小型部署或不需要灵活伸缩以满足不断变化的需求的部署。
+
+
+
+
+
+## Kubernetes
+
+Originally designed by Google, but now maintained by an independent foundation, **Kubernetes** (https://kubernetes.io/, also known as k8s) provides a platform- independent way of automating work with containerized systems, allowing you to describe the system in terms of different components, and issuing commands to a controller to adjust settings.
+
+最初由谷歌设计，但现在由Kubernetes (https://kubernetes)独立基金会维护。Io /(也称为k8s)提供了一种独立于平台的方式来自动化容器化系统的工作，允许您根据不同的组件来描述系统，并向控制器发出命令来调整设置。
+
+
+
+Rather than create all the AWS resources yourself, or create Terraform configuration to do so, eksctl performs all the work for you, with sensible defaults for experimenting with Kubernetes. To get started, it is best to use the AWS credentials we created for earlier examples and to install both eksctl and kubectl—the Kubernetes command line. The AWS credentials will be used by eksctl to create the cluster and other necessary resources, and once done, kubectl can be used to deploy services and software. Unlike Docker Swarm, kubectl's administrative commands are designed to be run from your own computer:
+
+与自己创建所有AWS资源或创建terrraform配置不同，eksctl为您执行所有工作，并使用合理的默认值来试验Kubernetes。首先，最好使用我们为前面的示例创建的AWS凭据，并同时安装eksctl和kubectl—Kubernetes命令行。eksctl将使用AWS凭证创建集群和其他必要的资源，完成后，kubectl可用于部署服务和软件。与Docker Swarm不同，kubectl的管理命令被设计成可以在你自己的计算机上运行:
+
+
+
+## Summary 
+
+As a guide, consider:
+
+- Docker Compose when you need to deploy multiple containers in a small environment, and do not need to manage a large infrastructure.
+- Docker Swarm when you need flexibility in how many containers are deployed, to respond to a changing situation, and are happy to manage a larger cloud infrastructure.
+- Kubernetes when automation and flexibility are paramount, and you have people and time available to manage the infrastructure and handle the complexity.
+
+
+
+
+
+You will not be locked into one orchestration tool once you choose it, as the containers you build can be used in any of them, but moving to a different orchestration tool can be hard work, depending on how complex your configuration is.
+
+In that vein, to make their services easier to use and more appealing, cloud providers have built-in features to handle deployments. The three largest cloud providers are currently AWS, Google Cloud, and Microsoft Azure, although many other good options exist.
+
+
+
+作为指导，考虑:
+
+- Docker Compose:当你需要在一个小环境中部署多个容器，而不需要管理大型基础设施时。
+
+- Docker Swarm，当你需要灵活部署多少容器，以响应不断变化的情况，并乐于管理更大的云基础设施。
+-
+- 当自动化和灵活性是最重要的，你有人力和时间来管理基础设施和处理复杂性时，Kubernetes。
+
+一旦选择了某个编排工具，您就不会被锁定在该工具中，因为您构建的容器可以在任何一个编排工具中使用，但是迁移到不同的编排工具可能是一项艰巨的工作，这取决于您的配置有多复杂。
+
+在这种情况下，为了使他们的服务更容易使用和更有吸引力，云提供商有内置的功能来处理部署。目前最大的三个云提供商是AWS、谷歌cloud和Microsoft Azure，尽管还有许多其他好的选择。
 
 
 
